@@ -7,7 +7,7 @@ import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
 
-st.set_page_config(page_title="TradingView Screener", page_icon="📊")
+st.set_page_config(page_title="TradingView Screener", page_icon="📊", layout="wide")
 
 # Sekme yazı stili
 st.markdown("""
