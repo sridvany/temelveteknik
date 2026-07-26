@@ -1,4 +1,4 @@
-import streamlit as st
+8import streamlit as st
 import requests
 import pandas as pd
 import io
@@ -602,7 +602,7 @@ Birlikte okuma:
 # ============================================================
 st.divider()
 st.header("📈 Teknik Analiz")
-st.caption("Yukarıda temel analizle firma seç, aşağıya ticker'ını yazıp Analiz Et'e bas. "
+st.caption("Yukarıda temel analizle firma seç, solda ticker'ını yazıp Analiz Et'e bas. "
            "YATIRIM TAVSİYESİ İÇERMEZ.")
 
 # ============================================================
