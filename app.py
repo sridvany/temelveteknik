@@ -426,18 +426,15 @@ if "tarama" in st.session_state:
 
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
         df_ozet = df[OZET_ADLARI]
-        df_genel = df[ortak_adlar]
         df_gelir = df[ortak_adlar + [k[1] for k in GELIR_KOLONLARI]]
         df_bilanco = df[ortak_adlar + [k[1] for k in BILANCO_KOLONLARI]]
         df_nakit = df[ortak_adlar + [k[1] for k in NAKIT_KOLONLARI]]
 
-        sek_ozet, sek1, sek2, sek3, sek4 = st.tabs(
-            ["Özet", "Genel", "Gelir Tablosu", "Bilanço", "Nakit Akışı"]
+        sek_ozet, sek2, sek3, sek4 = st.tabs(
+            ["Özet", "Gelir Tablosu", "Bilanço", "Nakit Akışı"]
         )
         with sek_ozet:
             st.dataframe(df_ozet, use_container_width=True)
-        with sek1:
-            st.dataframe(df_genel, use_container_width=True)
         with sek2:
             st.dataframe(df_gelir, use_container_width=True)
         with sek3:
@@ -448,7 +445,6 @@ if "tarama" in st.session_state:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
             df_ozet.to_excel(writer, index=False, sheet_name="Özet")
-            df_genel.to_excel(writer, index=False, sheet_name="Genel")
             df_gelir.to_excel(writer, index=False, sheet_name="Gelir Tablosu")
             df_bilanco.to_excel(writer, index=False, sheet_name="Bilanço")
             df_nakit.to_excel(writer, index=False, sheet_name="Nakit Akışı")
