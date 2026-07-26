@@ -1,5 +1,7 @@
 streamlit
 requests
 pandas
-xlsxwriter
+numpy
 yfinance
+plotly
+xlsxwriter
