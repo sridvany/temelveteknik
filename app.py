@@ -189,6 +189,19 @@ OZET_ORANLAR = [
     ("Net Borç/FAVÖK", "NB/FAVÖK (Sekt.)", False, "dusuk"),
 ]
 
+# Aykırı değer sınırları: payda sıfıra yaklaşınca mekanik olarak patlayan
+# oranlar (ör. net kârı ~0 şirkette F/K 620). Sınırı aşan değer ekranda
+# görünür ama medyan / Sektör Skoru / Yıldız hesaplarına katılmaz.
+AYKIRI_SINIRLAR = {
+    "F/K (FKO)": 200,
+    "PD/DD": 100,
+    "FD/FAVÖK": 200,
+    "FD/Gelir": 100,
+    "PEG": 50,
+    "CFO/Net Kâr": 20,
+    "Net Borç/FAVÖK": 50,
+}
+
 # Özet sekmesinde gösterilecek kolonlar: her oranın yanında sektör medyanı
 OZET_ADLARI = (
     ["Hisse", "Şirket", "Yıldız", "Sektör Skoru", "Sektör",
@@ -299,22 +312,34 @@ if "tarama" in st.session_state:
             df["Net Borç"] / df["FAVÖK (TTM)"]
         ).where(df["FAVÖK (TTM)"] > 0).round(2)
 
+        # Hesaplarda kullanılacak temiz değer: pozitiflik şartı + aykırı sınır.
+        # Ekrandaki ham değer değişmez; sadece hesap dışı kalır.
+        def oran_temiz(oran: str, sadece_poz: bool) -> pd.Series:
+            deger = df[oran].where(df[oran] > 0) if sadece_poz else df[oran]
+            sinir = AYKIRI_SINIRLAR.get(oran)
+            if sinir is not None:
+                deger = deger.where(deger.abs() <= sinir)
+            return deger
+
         # Her oran için sektör medyanı kolonu.
         # sadece_pozitif=True olanlarda negatifler medyan dışı bırakılır;
         # NaN'lar (ör. temettü vermeyenler) medyana zaten katılmaz.
+        # Sektörde geçerli verisi olan en az 3 şirket yoksa medyan boş
+        # bırakılır (tek şirketli sektörde medyan = kendisi olurdu).
         for oran, sekt_ad, sadece_poz, _ in OZET_ORANLAR:
-            deger = df[oran].where(df[oran] > 0) if sadece_poz else df[oran]
-            df[sekt_ad] = (
-                deger.groupby(df["Sektör"]).transform("median").round(2)
-            )
+            deger = oran_temiz(oran, sadece_poz)
+            df[sekt_ad] = deger.groupby(df["Sektör"]).transform(
+                lambda s: s.median() if s.count() >= 3 else float("nan")
+            ).round(2)
 
         # Sektör Skoru (0-100): her oran kendi sektör medyanıyla doğru
         # yönde kıyaslanır (düşük-iyi / yüksek-iyi). Verisi eksik oran
         # sayılmaz; skor = kazanılan / geçerli oran sayısı x 100.
+        # En az 3 geçerli oran yoksa skor boş bırakılır.
         skor_kazanilan = pd.Series(0, index=df.index)
         skor_gecerli = pd.Series(0, index=df.index)
         for oran, sekt_ad, sadece_poz, yon in OZET_ORANLAR:
-            deger = df[oran].where(df[oran] > 0) if sadece_poz else df[oran]
+            deger = oran_temiz(oran, sadece_poz)
             gecerli_o = deger.notna() & df[sekt_ad].notna()
             if yon == "dusuk":
                 kazandi = deger <= df[sekt_ad]
@@ -323,36 +348,43 @@ if "tarama" in st.session_state:
             skor_kazanilan += (kazandi & gecerli_o).astype(int)
             skor_gecerli += gecerli_o.astype(int)
         df["Sektör Skoru"] = (
-            (100 * skor_kazanilan / skor_gecerli.where(skor_gecerli > 0))
+            (100 * skor_kazanilan / skor_gecerli.where(skor_gecerli >= 3))
             .round().astype("Int64")
         )
 
         # Yıldız: 5 kriter — kalite mutlak eşik, değerleme sektör-göreli.
         # Eksik veride kriter atlanır, puan 5'e orantılanır.
+        # En az 3 geçerli kriter yoksa yıldız verilmez ("—").
+        cfo_nk = oran_temiz("CFO/Net Kâr", False)
         kriter = pd.DataFrame(index=df.index)
         kriter["roe"] = df["ROE %"] >= 15
         kriter["roic"] = df["ROIC %"] >= 10
-        kriter["nakit"] = df["CFO/Net Kâr"] >= 0.8
+        kriter["nakit"] = cfo_nk >= 0.8
         kriter["borc"] = df["Borç / Özkaynak"] <= 1
-        fk_poz = df["F/K (FKO)"].where(df["F/K (FKO)"] > 0)
-        fd_poz = df["FD/FAVÖK"].where(df["FD/FAVÖK"] > 0)
+        fk_poz = oran_temiz("F/K (FKO)", True)
+        fd_poz = oran_temiz("FD/FAVÖK", True)
         kriter["deger"] = (
             (fk_poz <= df["F/K (Sekt.)"]) & (fd_poz <= df["FD/FAVÖK (Sekt.)"])
         )
         gecerli = pd.DataFrame({
             "roe": df["ROE %"].notna(),
             "roic": df["ROIC %"].notna(),
-            "nakit": df["CFO/Net Kâr"].notna(),
+            "nakit": cfo_nk.notna(),
             "borc": df["Borç / Özkaynak"].notna(),
-            "deger": fk_poz.notna() & fd_poz.notna(),
+            "deger": (
+                fk_poz.notna() & fd_poz.notna()
+                & df["F/K (Sekt.)"].notna() & df["FD/FAVÖK (Sekt.)"].notna()
+            ),
         })
         puan = (kriter & gecerli).sum(axis=1)
         gecerli_sayisi = gecerli.sum(axis=1)
         yildiz_sayi = (
-            (5 * puan / gecerli_sayisi.where(gecerli_sayisi > 0))
-            .round().fillna(0).astype(int)
+            (5 * puan / gecerli_sayisi.where(gecerli_sayisi >= 3))
+            .round()
         )
-        df["Yıldız"] = yildiz_sayi.map(lambda s: "★" * s + "☆" * (5 - s))
+        df["Yıldız"] = yildiz_sayi.map(
+            lambda s: "—" if pd.isna(s) else "★" * int(s) + "☆" * (5 - int(s))
+        )
 
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
         df_ozet = df[OZET_ADLARI]
@@ -456,6 +488,18 @@ her biri kendi sektör medyanıyla doğru yönde kıyaslanır:
 
 Skor = medyanı geçen oran sayısı / geçerli oran sayısı × 100.
 Verisi eksik oran hesaba katılmaz.
+
+#### Güvenlik kuralları
+
+- **Aykırı değer filtresi:** Payda sıfıra yaklaşınca patlayan oranlar
+  (ör. F/K > 200, CFO/Net Kâr > 20) ekranda görünür ama medyan, Skor
+  ve Yıldız hesaplarına katılmaz.
+- **En az 3 şirket:** Sektörde geçerli verisi olan 3'ten az şirket
+  varsa o oranın sektör medyanı boş bırakılır (tek şirketli sektörde
+  medyan şirketin kendisi olurdu — skor otomatik şişerdi).
+- **En az 3 kriter/oran:** 3'ten az geçerli kriteri olan şirkete
+  yıldız verilmez ("—"); 3'ten az geçerli oranı olana Sektör Skoru
+  verilmez. Tek kriterden 5 yıldız çıkmasını engeller.
 
 Birlikte okuma:
 
