@@ -187,6 +187,7 @@ OZET_ORANLAR = [
     ("ROA %", "ROA (Sekt.)", False, "yuksek"),
     ("Tem. Verimi %", "Tem. (Sekt.)", False, "yuksek"),
     ("Net Borç/FAVÖK", "NB/FAVÖK (Sekt.)", False, "dusuk"),
+    ("FCF Verimi %", "FCF Ver. (Sekt.)", False, "yuksek"),
 ]
 
 # Aykırı değer sınırları: payda sıfıra yaklaşınca mekanik olarak patlayan
@@ -200,6 +201,7 @@ AYKIRI_SINIRLAR = {
     "PEG": 50,
     "CFO/Net Kâr": 20,
     "Net Borç/FAVÖK": 50,
+    "FCF Verimi %": 100,
 }
 
 # Özet sekmesinde gösterilecek kolonlar: her oranın yanında sektör medyanı
@@ -214,7 +216,7 @@ TUM_KOLONLAR = (
 )
 
 
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=3600)
 def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
     url = f"https://scanner.tradingview.com/{market}/scan"
     headers = {
@@ -311,6 +313,13 @@ if "tarama" in st.session_state:
         df["Net Borç/FAVÖK"] = (
             df["Net Borç"] / df["FAVÖK (TTM)"]
         ).where(df["FAVÖK (TTM)"] > 0).round(2)
+
+        # Türetilmiş oran: FCF Verimi = Serbest Nakit Akışı / Piyasa Değeri.
+        # Negatif değerler anlamlıdır (yatırım fazı / nakit yakma) ve
+        # medyana katılır.
+        df["FCF Verimi %"] = (
+            100 * df["Serbest Nakit Akışı (TTM)"] / df["Piyasa Değeri"]
+        ).where(df["Piyasa Değeri"] > 0).round(2)
 
         # Hesaplarda kullanılacak temiz değer: pozitiflik şartı + aykırı sınır.
         # Ekrandaki ham değer değişmez; sadece hesap dışı kalır.
@@ -468,7 +477,8 @@ Yıldız **mutlak** kaliteyi ölçer ("iyi şirket mi?"), Sektör Skoru
 her biri kendi sektör medyanıyla doğru yönde kıyaslanır:
 
 - **Düşük iyi:** F/K, PD/DD, FD/FAVÖK, FD/Gelir, PEG, Net Borç/FAVÖK
-- **Yüksek iyi:** ROE, ROIC, ROA, CFO/Net Kâr, Cari, Asit-Test, Temettü
+- **Yüksek iyi:** ROE, ROIC, ROA, CFO/Net Kâr, Cari, Asit-Test, Temettü,
+  FCF Verimi
 
 Skor = medyanı geçen oran sayısı / geçerli oran sayısı × 100.
 Verisi eksik oran hesaba katılmaz.
@@ -519,6 +529,7 @@ Birlikte okuma:
 | Oran | Formül (özü) | Anlamı | İyi olan |
 |---|---|---|---|
 | **CFO/Net Kâr** | Faaliyet nakit akışı / Net kâr | Kâr gerçekten kasaya giriyor mu | 🔼 Yüksek (≥ 0.8) — sürekli < 1 ise kâr kağıt üzerinde olabilir |
+| **FCF Verimi %** | Serbest nakit akışı / Piyasa değeri | Yatırımlar sonrası kalan nakdin fiyata oranı | 🔼 Yüksek — negatifse şirket nakit yakıyor; sermaye-yoğun sektörlerde yapısal olarak düşüktür, sektörüne göre oku |
 | **Net Borç/FAVÖK** | (Borç − Nakit) / FAVÖK | Borç kaç yıllık faaliyet kârı eder | 🔽 Düşük (≤ 2-3) — **negatif = net nakit**, en sağlamı |
 | **Borç/Özkaynak** | Toplam borç / Özkaynak | Bilanço kaldıracı | 🔽 Düşük (≤ 1) — yüksekse ROE'ye güvenme |
 
