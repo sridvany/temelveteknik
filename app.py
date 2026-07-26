@@ -280,7 +280,7 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
     return df_son, son_hata
 
 
-st.title("📊 TradingView Screener")
+st.title("📊 Temel Analiz")
 
 
 # Türkçe karakter farkını aşmak için sıralama anahtarı
