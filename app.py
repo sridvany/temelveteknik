@@ -214,7 +214,7 @@ TUM_KOLONLAR = (
 )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=0)
 def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
     url = f"https://scanner.tradingview.com/{market}/scan"
     headers = {
