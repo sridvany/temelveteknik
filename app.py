@@ -119,6 +119,8 @@ ORTAK_KOLONLAR = [
     ("currency", "Para Birimi"),
     ("sector", "Sektör"),
     ("market_cap_basic", "Piyasa Değeri"),
+    ("Perf.W", "7G Değişim %"),
+    ("Perf.1M", "30G Değişim %"),
 ]
 
 GELIR_KOLONLARI = [
@@ -209,7 +211,8 @@ AYKIRI_SINIRLAR = {
 # Özet sekmesinde gösterilecek kolonlar: her oranın yanında sektör medyanı
 OZET_ADLARI = (
     ["Hisse", "Şirket", "Yıldız", "Sektör Skoru", "Sektör",
-     "Piyasa Değeri", "FAVÖK (TTM)", "Son Bilanço", "Sonraki Bilanço"]
+     "Piyasa Değeri", "7G Değişim %", "30G Değişim %",
+     "FAVÖK (TTM)", "Son Bilanço", "Sonraki Bilanço"]
     + [ad for oran, sekt, _, _ in OZET_ORANLAR for ad in (oran, sekt)]
 )
 
