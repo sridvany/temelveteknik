@@ -1,4 +1,4 @@
-# 📊 TradingView Screener + Teknik Analiz Terminali
+# 📊 Temel ve Teknik Analiz Terminali
 
 İki aşamalı bir hisse senedi analiz uygulaması. Üstte **temel analizle** uluslararası piyasalardan firma elenir; altta seçilen firmanın ticker'ı girilerek **teknik analiz** yapılır. Streamlit üzerinde tek dosyada çalışır.
 
