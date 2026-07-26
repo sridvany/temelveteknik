@@ -421,25 +421,9 @@ if "tarama" in st.session_state:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-        with st.expander("📖 Oranlar Nasıl Okunmalı? (Yıldız Sistemi)"):
+        with st.expander("📖 Yıldız ve Sektör Skoru Nasıl Çalışır?"):
             st.markdown("""
-#### Oranların tek başına anlamı
-
-| Oran | Ne ölçer? | İstenen |
-|---|---|---|
-| **F/K** | Kârın kaç katını ödüyorsun | Düşük (sektörüne göre) |
-| **PD/DD** | Özkaynağın kaç katını ödüyorsun | Düşük — ama ROE ile birlikte oku |
-| **FD/FAVÖK** | Borç dahil şirket değeri / faaliyet kârı | Düşük; F/K'dan farkı borcu da hesaba katması |
-| **ROE %** | Özkaynak kârlılığı | Yüksek (≥ %15) — ama borçla şişirilebilir |
-| **ROIC %** | Toplam yatırılan sermayenin kârlılığı | Yüksek (≥ %10) — ROE'nin kaldıraçsız hali |
-| **CFO/Net Kâr** | Kâr gerçekten nakde dönüşüyor mu | ≥ 0.8; sürekli < 1 ise kâr kalitesi şüpheli |
-| **Borç/Özkaynak** | Bilanço kaldıracı | ≤ 1; yüksekse ROE'ye güvenme |
-| **Cari / Asit-Test** | Kısa vadeli borç ödeme gücü | ≥ 1; asit-test stokları saymaz |
-| **PEG** | F/K'nın kâr büyümesine oranı | ~1 makul; < 1 büyümeye göre ucuz |
-| **FD/Gelir** | Borç dahil şirket değeri / satışlar | Düşük; zarar eden şirketlerde de çalışır |
-| **ROA %** | Toplam varlık kârlılığı | Yüksek; kaldıraçtan en az etkilenen kârlılık |
-| **Tem. Verimi %** | Yıllık temettü / fiyat | Sürdürülebilirse yüksek; ödeme oranına bak |
-| **Net Borç/FAVÖK** | Borcun kaç yıllık faaliyet kârı ettiği | ≤ 2-3; negatifse net nakit pozisyonu |
+*(Oranların tek tek anlamı için alttaki "Tüm Oranlar" bölümüne bak.)*
 
 **(Sekt.) kolonları:** Her oranın yanındaki değer, seçili piyasada aynı
 sektördeki şirketlerin **medyanıdır**. F/K, PD/DD, FD/FAVÖK, PEG ve
@@ -489,6 +473,14 @@ her biri kendi sektör medyanıyla doğru yönde kıyaslanır:
 Skor = medyanı geçen oran sayısı / geçerli oran sayısı × 100.
 Verisi eksik oran hesaba katılmaz.
 
+Birlikte okuma:
+
+| Yıldız | Skor | Yorum |
+|---|---|---|
+| ★★★★★ | 85 | Kaliteli **ve** sektörünün yıldızı |
+| ★★☆☆☆ | 90 | Sektörünün en iyisi ama sektör zayıf (tuzak olabilir) |
+| ★★★★☆ | 40 | İyi şirket ama sektöründe daha cazibi var |
+
 #### Güvenlik kuralları
 
 - **Aykırı değer filtresi:** Payda sıfıra yaklaşınca patlayan oranlar
@@ -500,12 +492,55 @@ Verisi eksik oran hesaba katılmaz.
 - **En az 3 kriter/oran:** 3'ten az geçerli kriteri olan şirkete
   yıldız verilmez ("—"); 3'ten az geçerli oranı olana Sektör Skoru
   verilmez. Tek kriterden 5 yıldız çıkmasını engeller.
+""")
 
-Birlikte okuma:
+        with st.expander("📚 Tüm Oranlar: Ne Anlama Gelir, Yüksek mi Düşük mü İyi?"):
+            st.markdown("""
+#### Değerleme oranları — 🔽 düşük iyi
 
-| Yıldız | Skor | Yorum |
-|---|---|---|
-| ★★★★★ | 85 | Kaliteli **ve** sektörünün yıldızı |
-| ★★☆☆☆ | 90 | Sektörünün en iyisi ama sektör zayıf (tuzak olabilir) |
-| ★★★★☆ | 40 | İyi şirket ama sektöründe daha cazibi var |
+| Oran | Formül (özü) | Anlamı | İyi olan |
+|---|---|---|---|
+| **F/K (FKO)** | Fiyat / Hisse başı kâr | 1 birim kâr için kaç birim ödüyorsun | 🔽 Düşük — ama sektörüne göre; negatifse (zarar) anlamsız |
+| **PD/DD** | Piyasa değeri / Özkaynak | Özkaynağın kaç katını ödüyorsun | 🔽 Düşük — ROE yüksekse prim normaldir |
+| **FD/FAVÖK** | (Piyasa değeri + Net borç) / FAVÖK | Borç dahil şirket fiyatı / faaliyet kârı | 🔽 Düşük — F/K'dan farkı borcu da katması; bankalarda hesaplanmaz |
+| **FD/Gelir** | Firma değeri / Satışlar | Satışların kaç katını ödüyorsun | 🔽 Düşük — zarar eden şirketlerde de çalışır |
+| **PEG** | F/K / Kâr büyüme hızı | Fiyat, büyümeye göre pahalı mı | 🔽 Düşük — ~1 makul, < 1 büyümeye göre ucuz; negatif büyümede anlamsız |
+
+#### Kârlılık oranları — 🔼 yüksek iyi
+
+| Oran | Formül (özü) | Anlamı | İyi olan |
+|---|---|---|---|
+| **ROE %** | Net kâr / Özkaynak | Ortağın parası ne kadar kâr üretiyor | 🔼 Yüksek (≥ %15) — ama borçla şişirilebilir, ROIC ile birlikte oku |
+| **ROIC %** | Faaliyet kârı / Yatırılan sermaye | Borç + özkaynak toplamının kârlılığı | 🔼 Yüksek (≥ %10) — ROE'nin kaldıraçsız, daha dürüst hali |
+| **ROA %** | Net kâr / Toplam varlıklar | Tüm varlıkların kârlılığı | 🔼 Yüksek — kaldıraçtan en az etkilenen kârlılık ölçüsü |
+
+#### Kâr kalitesi ve borç — yönü karışık
+
+| Oran | Formül (özü) | Anlamı | İyi olan |
+|---|---|---|---|
+| **CFO/Net Kâr** | Faaliyet nakit akışı / Net kâr | Kâr gerçekten kasaya giriyor mu | 🔼 Yüksek (≥ 0.8) — sürekli < 1 ise kâr kağıt üzerinde olabilir |
+| **Net Borç/FAVÖK** | (Borç − Nakit) / FAVÖK | Borç kaç yıllık faaliyet kârı eder | 🔽 Düşük (≤ 2-3) — **negatif = net nakit**, en sağlamı |
+| **Borç/Özkaynak** | Toplam borç / Özkaynak | Bilanço kaldıracı | 🔽 Düşük (≤ 1) — yüksekse ROE'ye güvenme |
+
+#### Likidite oranları — 🔼 yüksek iyi
+
+| Oran | Formül (özü) | Anlamı | İyi olan |
+|---|---|---|---|
+| **Cari Oran** | Dönen varlık / Kısa vadeli borç | 1 yıl içindeki borç ödeme gücü | 🔼 Yüksek (≥ 1) — ama çok yüksekse para atıl duruyor olabilir |
+| **Asit-Test** | (Dönen varlık − Stok) / KV borç | Stok satmadan borç ödeme gücü | 🔼 Yüksek (≥ 1) — Cari'nin muhafazakâr hali |
+
+#### Temettü — 🔼 yüksek iyi (şartlı)
+
+| Oran | Formül (özü) | Anlamı | İyi olan |
+|---|---|---|---|
+| **Tem. Verimi %** | Yıllık temettü / Fiyat | Fiyata göre nakit getiri | 🔼 Yüksek — ama aşırı yüksekse (≥ %15) sürdürülemez olabilir veya fiyat çökmüştür; boşsa temettü vermiyor |
+
+#### Genel uyarılar
+
+- Hiçbir oran tek başına karar verdirmez; **aynı sektördeki (Sekt.)
+  medyanıyla** kıyasla.
+- Sektörler yapısal olarak farklıdır: bankada PD/DD ~1 normalken
+  yazılımda 5+ olabilir; FD/FAVÖK finans şirketlerinde hesaplanmaz.
+- Uç değerler (F/K 500 gibi) genelde şirketin harika olduğunu değil,
+  paydanın (kârın) sıfıra yaklaştığını gösterir.
 """)
