@@ -143,6 +143,8 @@ GELIR_KOLONLARI = [
     ("enterprise_value_to_revenue_ttm", "FD/Gelir"),
     ("return_on_assets_fq", "ROA %"),
     ("dividend_yield_recent", "Tem. Verimi %"),
+    ("earnings_release_date", "Son Bilanço"),
+    ("earnings_release_next_date", "Sonraki Bilanço"),
 ]
 
 BILANCO_KOLONLARI = [
@@ -207,7 +209,7 @@ AYKIRI_SINIRLAR = {
 # Özet sekmesinde gösterilecek kolonlar: her oranın yanında sektör medyanı
 OZET_ADLARI = (
     ["Hisse", "Şirket", "Yıldız", "Sektör Skoru", "Sektör",
-     "Piyasa Değeri", "FAVÖK (TTM)"]
+     "Piyasa Değeri", "FAVÖK (TTM)", "Son Bilanço", "Sonraki Bilanço"]
     + [ad for oran, sekt, _, _ in OZET_ORANLAR for ad in (oran, sekt)]
 )
 
@@ -303,6 +305,29 @@ if "tarama" in st.session_state:
             st.code(hata)
     else:
         st.success(f"{secim}: {len(df)} şirket çekildi.")
+
+        # Bilanço tarihleri: unix timestamp -> tarih. 7 gün içinde bilanço
+        # açıklayacaklara ⏰ rozeti (oranlar yakında değişecek uyarısı).
+        bugun = pd.Timestamp.now().normalize()
+        sonraki_ts = pd.to_datetime(
+            df["Sonraki Bilanço"], unit="s", errors="coerce"
+        ).dt.normalize()
+        yakin = sonraki_ts.between(bugun, bugun + pd.Timedelta(days=7))
+        for kolon in ("Son Bilanço", "Sonraki Bilanço"):
+            df[kolon] = pd.to_datetime(
+                df[kolon], unit="s", errors="coerce"
+            ).dt.strftime("%Y-%m-%d")
+        df.loc[yakin, "Sonraki Bilanço"] = (
+            "⏰ " + df.loc[yakin, "Sonraki Bilanço"]
+        )
+
+        yakin_sayi = int(yakin.sum())
+        if yakin_sayi:
+            st.info(
+                f"⏰ Önümüzdeki 7 günde bilanço açıklayacak "
+                f"**{yakin_sayi} şirket** var — bu şirketlerin oranları, "
+                f"Yıldız ve Sektör Skoru bilanço sonrası değişebilir."
+            )
 
         # Türetilmiş oran: kârın nakde dönüşümü (sadece pozitif net kârda anlamlı)
         df["CFO/Net Kâr"] = (
