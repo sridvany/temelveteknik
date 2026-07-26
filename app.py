@@ -323,10 +323,14 @@ if "tarama" in st.session_state:
 
         yakin_sayi = int(yakin.sum())
         if yakin_sayi:
+            yakin_hisseler = ", ".join(
+                df.loc[yakin, "Hisse"].astype(str).sort_values()
+            )
             st.info(
                 f"⏰ Önümüzdeki 7 günde bilanço açıklayacak "
-                f"**{yakin_sayi} şirket** var — bu şirketlerin oranları, "
-                f"Yıldız ve Sektör Skoru bilanço sonrası değişebilir."
+                f"**{yakin_sayi} şirket** var: **{yakin_hisseler}** — "
+                f"bu şirketlerin oranları, Yıldız ve Sektör Skoru "
+                f"bilanço sonrası değişebilir."
             )
 
         # Türetilmiş oran: kârın nakde dönüşümü (sadece pozitif net kârda anlamlı)
