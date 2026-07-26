@@ -171,27 +171,29 @@ NAKIT_KOLONLARI = [
 
 # Özet sekmesindeki oranlar. sadece_pozitif=True: medyan yalnızca
 # pozitif değerlerden hesaplanır (negatif F/K, PEG vb. anlamsız).
-# (oran_adi, sektör_kolon_adi, sadece_pozitif)
+# yon: sektör medyanına göre hangi taraf iyi ("dusuk" / "yuksek").
+# (oran_adi, sektör_kolon_adi, sadece_pozitif, yon)
 OZET_ORANLAR = [
-    ("F/K (FKO)", "F/K (Sekt.)", True),
-    ("PD/DD", "PD/DD (Sekt.)", True),
-    ("ROE %", "ROE (Sekt.)", False),
-    ("ROIC %", "ROIC (Sekt.)", False),
-    ("FD/FAVÖK", "FD/FAVÖK (Sekt.)", True),
-    ("CFO/Net Kâr", "CFO/NK (Sekt.)", False),
-    ("Cari Oran", "Cari (Sekt.)", False),
-    ("Asit-Test Oranı", "Asit-Test (Sekt.)", False),
-    ("PEG", "PEG (Sekt.)", True),
-    ("FD/Gelir", "FD/Gelir (Sekt.)", True),
-    ("ROA %", "ROA (Sekt.)", False),
-    ("Tem. Verimi %", "Tem. (Sekt.)", False),
-    ("Net Borç/FAVÖK", "NB/FAVÖK (Sekt.)", False),
+    ("F/K (FKO)", "F/K (Sekt.)", True, "dusuk"),
+    ("PD/DD", "PD/DD (Sekt.)", True, "dusuk"),
+    ("ROE %", "ROE (Sekt.)", False, "yuksek"),
+    ("ROIC %", "ROIC (Sekt.)", False, "yuksek"),
+    ("FD/FAVÖK", "FD/FAVÖK (Sekt.)", True, "dusuk"),
+    ("CFO/Net Kâr", "CFO/NK (Sekt.)", False, "yuksek"),
+    ("Cari Oran", "Cari (Sekt.)", False, "yuksek"),
+    ("Asit-Test Oranı", "Asit-Test (Sekt.)", False, "yuksek"),
+    ("PEG", "PEG (Sekt.)", True, "dusuk"),
+    ("FD/Gelir", "FD/Gelir (Sekt.)", True, "dusuk"),
+    ("ROA %", "ROA (Sekt.)", False, "yuksek"),
+    ("Tem. Verimi %", "Tem. (Sekt.)", False, "yuksek"),
+    ("Net Borç/FAVÖK", "NB/FAVÖK (Sekt.)", False, "dusuk"),
 ]
 
 # Özet sekmesinde gösterilecek kolonlar: her oranın yanında sektör medyanı
 OZET_ADLARI = (
-    ["Hisse", "Şirket", "Yıldız", "Sektör", "Piyasa Değeri", "FAVÖK (TTM)"]
-    + [ad for oran, sekt, _ in OZET_ORANLAR for ad in (oran, sekt)]
+    ["Hisse", "Şirket", "Yıldız", "Sektör Skoru", "Sektör",
+     "Piyasa Değeri", "FAVÖK (TTM)"]
+    + [ad for oran, sekt, _, _ in OZET_ORANLAR for ad in (oran, sekt)]
 )
 
 TUM_KOLONLAR = (
@@ -300,11 +302,30 @@ if "tarama" in st.session_state:
         # Her oran için sektör medyanı kolonu.
         # sadece_pozitif=True olanlarda negatifler medyan dışı bırakılır;
         # NaN'lar (ör. temettü vermeyenler) medyana zaten katılmaz.
-        for oran, sekt_ad, sadece_poz in OZET_ORANLAR:
+        for oran, sekt_ad, sadece_poz, _ in OZET_ORANLAR:
             deger = df[oran].where(df[oran] > 0) if sadece_poz else df[oran]
             df[sekt_ad] = (
                 deger.groupby(df["Sektör"]).transform("median").round(2)
             )
+
+        # Sektör Skoru (0-100): her oran kendi sektör medyanıyla doğru
+        # yönde kıyaslanır (düşük-iyi / yüksek-iyi). Verisi eksik oran
+        # sayılmaz; skor = kazanılan / geçerli oran sayısı x 100.
+        skor_kazanilan = pd.Series(0, index=df.index)
+        skor_gecerli = pd.Series(0, index=df.index)
+        for oran, sekt_ad, sadece_poz, yon in OZET_ORANLAR:
+            deger = df[oran].where(df[oran] > 0) if sadece_poz else df[oran]
+            gecerli_o = deger.notna() & df[sekt_ad].notna()
+            if yon == "dusuk":
+                kazandi = deger <= df[sekt_ad]
+            else:
+                kazandi = deger >= df[sekt_ad]
+            skor_kazanilan += (kazandi & gecerli_o).astype(int)
+            skor_gecerli += gecerli_o.astype(int)
+        df["Sektör Skoru"] = (
+            (100 * skor_kazanilan / skor_gecerli.where(skor_gecerli > 0))
+            .round().astype("Int64")
+        )
 
         # Yıldız: 5 kriter — kalite mutlak eşik, değerleme sektör-göreli.
         # Eksik veride kriter atlanır, puan 5'e orantılanır.
@@ -423,4 +444,24 @@ Verisi eksik kriter değerlendirme dışı bırakılır, puan 5'e
 orantılanır (ör. bankalarda FD/FAVÖK yoktur — kalan kriterlerden
 hesaplanır). ★★★★★ "al" demek değildir; kalite + ucuzluk
 kombinasyonunun mekanik bir özetidir. Yatırım tavsiyesi değildir.
+
+#### Sektör Skoru nasıl hesaplanıyor? (0–100)
+
+Yıldız **mutlak** kaliteyi ölçer ("iyi şirket mi?"), Sektör Skoru
+**göreli** konumu ölçer ("sektöründe nerede?"). Özet'teki 13 oranın
+her biri kendi sektör medyanıyla doğru yönde kıyaslanır:
+
+- **Düşük iyi:** F/K, PD/DD, FD/FAVÖK, FD/Gelir, PEG, Net Borç/FAVÖK
+- **Yüksek iyi:** ROE, ROIC, ROA, CFO/Net Kâr, Cari, Asit-Test, Temettü
+
+Skor = medyanı geçen oran sayısı / geçerli oran sayısı × 100.
+Verisi eksik oran hesaba katılmaz.
+
+Birlikte okuma:
+
+| Yıldız | Skor | Yorum |
+|---|---|---|
+| ★★★★★ | 85 | Kaliteli **ve** sektörünün yıldızı |
+| ★★☆☆☆ | 90 | Sektörünün en iyisi ama sektör zayıf (tuzak olabilir) |
+| ★★★★☆ | 40 | İyi şirket ama sektöründe daha cazibi var |
 """)
