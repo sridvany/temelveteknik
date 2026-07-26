@@ -390,15 +390,18 @@ if "tarama" in st.session_state:
             .round().astype("Int64")
         )
 
-        # Yıldız: 5 kriter — kalite mutlak eşik, değerleme sektör-göreli.
-        # Eksik veride kriter atlanır, puan 5'e orantılanır.
-        # En az 3 geçerli kriter yoksa yıldız verilmez ("—").
+        # Yıldız: 7 kriter, her sağlanan kriter 1 yıldız (★ 0-7).
+        # Kalite kriterleri mutlak eşik, değerleme sektör-göreli.
+        # En az 4 geçerli kriter yoksa yıldız verilmez ("—").
         cfo_nk = oran_temiz("CFO/Net Kâr", False)
+        fcf_ver = oran_temiz("FCF Verimi %", False)
         kriter = pd.DataFrame(index=df.index)
         kriter["roe"] = df["ROE %"] >= 15
         kriter["roic"] = df["ROIC %"] >= 10
         kriter["nakit"] = cfo_nk >= 0.8
+        kriter["fcf"] = fcf_ver > 0
         kriter["borc"] = df["Borç / Özkaynak"] <= 1
+        kriter["buyume"] = df["EPS Büyüme YY % (TTM)"] > 0
         fk_poz = oran_temiz("F/K (FKO)", True)
         fd_poz = oran_temiz("FD/FAVÖK", True)
         kriter["deger"] = (
@@ -408,7 +411,9 @@ if "tarama" in st.session_state:
             "roe": df["ROE %"].notna(),
             "roic": df["ROIC %"].notna(),
             "nakit": cfo_nk.notna(),
+            "fcf": fcf_ver.notna(),
             "borc": df["Borç / Özkaynak"].notna(),
+            "buyume": df["EPS Büyüme YY % (TTM)"].notna(),
             "deger": (
                 fk_poz.notna() & fd_poz.notna()
                 & df["F/K (Sekt.)"].notna() & df["FD/FAVÖK (Sekt.)"].notna()
@@ -416,12 +421,9 @@ if "tarama" in st.session_state:
         })
         puan = (kriter & gecerli).sum(axis=1)
         gecerli_sayisi = gecerli.sum(axis=1)
-        yildiz_sayi = (
-            (5 * puan / gecerli_sayisi.where(gecerli_sayisi >= 3))
-            .round()
-        )
+        yildiz_sayi = puan.where(gecerli_sayisi >= 4)
         df["Yıldız"] = yildiz_sayi.map(
-            lambda s: "—" if pd.isna(s) else "★" * int(s) + "☆" * (5 - int(s))
+            lambda s: "—" if pd.isna(s) else "★" * int(s) + "☆" * (7 - int(s))
         )
 
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
@@ -480,25 +482,31 @@ Tek oran tek başına yanıltır — okuma sırası:
      (tek seferlik kâr, yüksek kaldıraç, kâr kalitesi)
    - Yüksek PD/DD + **sürdürülebilir** yüksek ROE → makul prim
 
-#### Yıldız nasıl hesaplanıyor? (★ 0–5)
+#### Yıldız nasıl hesaplanıyor? (★ 0–7)
 
 Her sağlanan kriter 1 yıldız:
 
 1. ROE ≥ %15 (kalite)
 2. ROIC ≥ %10 (kaldıraçsız kalite)
 3. CFO/Net Kâr ≥ 0.8 (kâr nakde dönüşüyor)
-4. Borç/Özkaynak ≤ 1 (bilanço sağlığı)
-5. F/K **ve** FD/FAVÖK kendi sektör medyanının altında (göreli ucuzluk)
+4. FCF Verimi > 0 (yatırımlar sonrası da nakit üretiyor)
+5. Borç/Özkaynak ≤ 1 (bilanço sağlığı)
+6. EPS büyümesi (YY) > 0 (kâr erimiyor — değer tuzağı freni)
+7. F/K **ve** FD/FAVÖK kendi sektör medyanının altında (göreli ucuzluk)
 
-Verisi eksik kriter değerlendirme dışı bırakılır, puan 5'e
-orantılanır (ör. bankalarda FD/FAVÖK yoktur — kalan kriterlerden
-hesaplanır). ★★★★★ "al" demek değildir; kalite + ucuzluk
-kombinasyonunun mekanik bir özetidir. Yatırım tavsiyesi değildir.
+Verisi eksik kriter değerlendirme dışı bırakılır ve o yıldız
+kazanılamaz (ör. bankalarda FD/FAVÖK yoktur — en fazla 6 yıldız
+alabilirler). En az 4 geçerli kriteri olmayan şirkete yıldız
+verilmez ("—"). ★★★★★★★ "al" demek değildir; kalite + nakit +
+büyüme + ucuzluk kombinasyonunun mekanik bir özetidir. Yatırım
+tavsiyesi değildir. Not: FCF kriteri sermaye-yoğun sektörlerde
+(havayolu, enerji, telekom) yatırım fazındaki sağlıklı şirketlere
+de yıldız kaybettirebilir — FCF Ver. (Sekt.) kolonuyla birlikte oku.
 
 #### Sektör Skoru nasıl hesaplanıyor? (0–100)
 
 Yıldız **mutlak** kaliteyi ölçer ("iyi şirket mi?"), Sektör Skoru
-**göreli** konumu ölçer ("sektöründe nerede?"). Özet'teki 13 oranın
+**göreli** konumu ölçer ("sektöründe nerede?"). Özet'teki 14 oranın
 her biri kendi sektör medyanıyla doğru yönde kıyaslanır:
 
 - **Düşük iyi:** F/K, PD/DD, FD/FAVÖK, FD/Gelir, PEG, Net Borç/FAVÖK
@@ -512,9 +520,9 @@ Birlikte okuma:
 
 | Yıldız | Skor | Yorum |
 |---|---|---|
-| ★★★★★ | 85 | Kaliteli **ve** sektörünün yıldızı |
-| ★★☆☆☆ | 90 | Sektörünün en iyisi ama sektör zayıf (tuzak olabilir) |
-| ★★★★☆ | 40 | İyi şirket ama sektöründe daha cazibi var |
+| ★★★★★★★ | 85 | Kaliteli **ve** sektörünün yıldızı |
+| ★★★☆☆☆☆ | 90 | Sektörünün en iyisi ama sektör zayıf (tuzak olabilir) |
+| ★★★★★☆☆ | 40 | İyi şirket ama sektöründe daha cazibi var |
 
 #### Güvenlik kuralları
 
@@ -524,9 +532,9 @@ Birlikte okuma:
 - **En az 3 şirket:** Sektörde geçerli verisi olan 3'ten az şirket
   varsa o oranın sektör medyanı boş bırakılır (tek şirketli sektörde
   medyan şirketin kendisi olurdu — skor otomatik şişerdi).
-- **En az 3 kriter/oran:** 3'ten az geçerli kriteri olan şirkete
+- **En az 4 kriter / 3 oran:** 4'ten az geçerli kriteri olan şirkete
   yıldız verilmez ("—"); 3'ten az geçerli oranı olana Sektör Skoru
-  verilmez. Tek kriterden 5 yıldız çıkmasını engeller.
+  verilmez. Bir-iki kriterden yüksek yıldız çıkmasını engeller.
 """)
 
         with st.expander("📚 Tüm Oranlar: Ne Anlama Gelir, Yüksek mi Düşük mü İyi?"):
