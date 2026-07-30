@@ -646,7 +646,7 @@ for k, v in _defaults.items():
 # ============================================================
 with st.sidebar:
     st.header("⚙️ Teknik Analiz Ayarları")
-    ta_ticker = st.text_input("Ticker Sembolü (örn. ASELS.IS, AAPL, GC=F):", "")
+    ta_ticker = st.text_input("Ticker Sembolü için finance.yahoo.com/lookup/:", "")
     if st.button("🔍 Analiz Et", type="primary", use_container_width=True):
         st.session_state["ta_aktif"] = True
         st.session_state["ta_ticker_secili"] = ta_ticker
