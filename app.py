@@ -7,7 +7,7 @@ import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
 
-st.set_page_config(page_title="Temel Analiz", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Ücretsiz Temel ve Teknik Analiz", page_icon="📊", layout="wide")
 
 # Sekme yazı stili
 st.markdown("""
@@ -286,7 +286,11 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
     return df_son, son_hata
 
 
-st.title("📊 Temel Analiz")
+st.title("Ücretsiz Temel ve Teknik Analiz")
+st.caption("Yatırım tavsiyesi içermez.")
+st.divider()
+
+st.header("📊 Temel Analiz")
 
 
 # Türkçe karakter farkını aşmak için sıralama anahtarı
