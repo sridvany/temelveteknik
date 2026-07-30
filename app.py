@@ -646,10 +646,23 @@ for k, v in _defaults.items():
 # ============================================================
 with st.sidebar:
     st.header("⚙️ Teknik Analiz Ayarları")
-    ta_ticker = st.text_input("Ticker Sembolü için: finance.yahoo.com/lookup", "")
+
+    st.markdown(
+        """
+        **Ticker sembolünü öğrenmek için:**  
+        <a href="https://finance.yahoo.com/lookup" target="_blank">
+            finance.yahoo.com/lookup
+        </a>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    ta_ticker = st.text_input("Ticker Sembolü", "")
+
     if st.button("🔍 Analiz Et", type="primary", use_container_width=True):
         st.session_state["ta_aktif"] = True
         st.session_state["ta_ticker_secili"] = ta_ticker
+
     # Buton bir kez basıldıktan sonra slider değişikliklerinde de analiz açık kalsın.
     ta_calistir = st.session_state.get("ta_aktif", False)
     ta_ticker = st.session_state.get("ta_ticker_secili", ta_ticker)
