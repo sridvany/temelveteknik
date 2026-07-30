@@ -48,6 +48,9 @@ PIYASALAR = {
     "Türkiye": ("turkey", "Turkey"),
     "ABD": ("america", "United States"),
     "Almanya": ("germany", "Germany"),
+}
+
+_KULLANILMAYAN_PIYASALAR = {
     "Arjantin": ("argentina", "Argentina"),
     "Avustralya": ("australia", "Australia"),
     "Avusturya": ("austria", "Austria"),
@@ -123,6 +126,7 @@ ORTAK_KOLONLAR = [
     ("currency", "Para Birimi"),
     ("sector", "Sektör"),
     ("market_cap_basic", "Piyasa Değeri"),
+    ("close", "Son Fiyat"),
     ("Perf.W", "7G Değişim %"),
     ("Perf.1M", "30G Değişim %"),
 ]
@@ -215,7 +219,7 @@ AYKIRI_SINIRLAR = {
 # Özet sekmesinde gösterilecek kolonlar: her oranın yanında sektör medyanı
 OZET_ADLARI = (
     ["Hisse", "Şirket", "Yıldız", "Sektör Skoru", "Sektör",
-     "Piyasa Değeri", "7G Değişim %", "30G Değişim %",
+     "Piyasa Değeri", "Son Fiyat", "7G Değişim %", "30G Değişim %",
      "FAVÖK (TTM)", "Son Bilanço", "Sonraki Bilanço"]
     + [ad for oran, sekt, _, _ in OZET_ORANLAR for ad in (oran, sekt)]
 )
@@ -248,12 +252,13 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
 
     all_rows = []
     son_hata = None
-    for start in range(0, 1500, 150):
+    start, adim = 0, 500
+    while True:
         payload = {
             "columns": api_alanlari,
             "markets": [market],
             "filter": filtreler,
-            "range": [start, start + 150],
+            "range": [start, start + adim],
             "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
         }
         res = requests.post(url, headers=headers, json=payload, timeout=20)
@@ -272,8 +277,9 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
             if isinstance(capex, (int, float)):
                 row["Yatırım Harcamaları / CapEx (TTM)"] = abs(capex)
             all_rows.append(row)
-        if len(data) < 150:
+        if len(data) < adim:
             break
+        start += adim
     df_son = pd.DataFrame(all_rows, columns=gosterim_adlari)
     # Olası çift kolon adlarını temizle
     df_son = df_son.loc[:, ~df_son.columns.duplicated()]
