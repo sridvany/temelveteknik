@@ -287,7 +287,7 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
 
 
 st.title("Ücretsiz Temel ve Teknik Analiz")
-st.caption("Yatırım tavsiyesi içermez.")
+st.caption("Eğitim amaçlıdır. Yatırım tavsiyesi içermez.")
 st.divider()
 
 st.header("📊 Temel Analiz")
