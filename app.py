@@ -1605,6 +1605,64 @@ def fetch_live_data(symbol, p, i):
         return pd.DataFrame()
 
 
+# Yıllık finansallar: istikrar kontrolü için (yıldız/skor hesabına GİRMEZ).
+# yfinance genelde son 4 mali yılı verir; bazı sembollerde eksik/boş gelir.
+YILLIK_SATIRLAR = [
+    ("Gelir", "fin", ["Total Revenue", "Operating Revenue"]),
+    ("FAVÖK", "fin", ["EBITDA", "Normalized EBITDA"]),
+    ("Net Kâr", "fin", ["Net Income", "Net Income Common Stockholders"]),
+    ("Faaliyet Nakit Akışı", "cf",
+     ["Operating Cash Flow", "Total Cash From Operating Activities"]),
+    ("Serbest Nakit Akışı", "cf", ["Free Cash Flow"]),
+]
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_yillik_finansallar(symbol: str) -> pd.DataFrame:
+    try:
+        t = yf.Ticker(symbol)
+        tablolar = {"fin": t.financials, "cf": t.cashflow}
+    except Exception:
+        return pd.DataFrame()
+
+    satirlar = {}
+    for ad, kaynak, adaylar in YILLIK_SATIRLAR:
+        tablo = tablolar.get(kaynak)
+        if tablo is None or getattr(tablo, "empty", True):
+            continue
+        for aday in adaylar:
+            if aday in tablo.index:
+                seri = tablo.loc[aday]
+                if isinstance(seri, pd.DataFrame):   # tekrar eden index adı
+                    seri = seri.iloc[0]
+                satirlar[ad] = pd.to_numeric(seri, errors="coerce")
+                break
+
+    if not satirlar:
+        return pd.DataFrame()
+
+    d = pd.DataFrame(satirlar).T
+    d.columns = [pd.to_datetime(c).year for c in d.columns]
+    d = d.loc[:, sorted(d.columns)]
+    d = d.dropna(axis=1, how="all")
+    return d
+
+
+def kisa_sayi(v) -> str:
+    if v is None or (isinstance(v, float) and np.isnan(v)):
+        return "—"
+    a = abs(v)
+    if a >= 1e12:
+        return f"{v / 1e12:,.2f} Tn"
+    if a >= 1e9:
+        return f"{v / 1e9:,.2f} Mr"
+    if a >= 1e6:
+        return f"{v / 1e6:,.2f} Mn"
+    if a >= 1e3:
+        return f"{v / 1e3:,.1f} B"
+    return f"{v:,.0f}"
+
+
 PLOTLY_CONFIG = dict(scrollZoom=True, displayModeBar=True,
     modeBarButtonsToAdd=["pan2d", "zoomIn2d", "zoomOut2d", "resetScale2d"],
     modeBarButtonsToRemove=["lasso2d", "select2d"])
@@ -1618,6 +1676,34 @@ def sub_layout(height=250):
 # 8. ANA MANTIK
 # ============================================================
 if ta_calistir and ta_ticker:
+    _fin_y = fetch_yillik_finansallar(ta_ticker)
+    with st.expander(
+        f"📅 {ta_ticker} — Yıllık Finansallar (istikrar kontrolü)", expanded=True
+    ):
+        if _fin_y.empty:
+            st.caption(
+                "Yahoo Finance bu sembol için yıllık finansal tablo vermiyor."
+            )
+        else:
+            st.dataframe(
+                _fin_y.apply(lambda kol: kol.map(kisa_sayi)),
+                use_container_width=True,
+            )
+            _uyari = []
+            for _ad in ("Net Kâr", "Serbest Nakit Akışı"):
+                if _ad in _fin_y.index:
+                    _neg = [str(y) for y in _fin_y.columns if _fin_y.loc[_ad, y] < 0]
+                    if _neg:
+                        _uyari.append(f"**{_ad}** negatif: {', '.join(_neg)}")
+            if _uyari:
+                st.warning("⚠️ " + " · ".join(_uyari))
+            else:
+                st.success("✅ Tablodaki yılların hepsinde net kâr ve FCF pozitif.")
+            st.caption(
+                "Yıldız ve Sektör Skoru hesabına girmez — istikrarı gözle "
+                "değerlendirmek için. Kaynak: Yahoo Finance yıllık tabloları."
+            )
+
     df = fetch_live_data(ta_ticker, period, interval)
 
     if not df.empty:
