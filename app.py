@@ -287,7 +287,14 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
 
 
 st.title("Ücretsiz Temel ve Teknik Analiz")
-st.caption("Eğitim amaçlıdır. Yatırım tavsiyesi içermez. Veri kaynakları Yahoo Finance ve Tradingview'dir.")
+st.caption(
+    "Eğitim amaçlıdır. Yatırım tavsiyesi içermez. Veri kaynakları "
+    '<a href="https://finance.yahoo.com/" target="_blank">Yahoo Finance</a>'
+    " ve "
+    '<a href="https://www.tradingview.com/screener/" target="_blank">'
+    "Tradingview</a>'dir.",
+    unsafe_allow_html=True,
+)
 st.divider()
 
 st.header("📊 Temel Analiz")
@@ -499,7 +506,7 @@ Tek oran tek başına yanıltır — okuma sırası:
      (tek seferlik kâr, yüksek kaldıraç, kâr kalitesi)
    - Yüksek PD/DD + **sürdürülebilir** yüksek ROE → makul prim
 
-#### Yıldız nasıl hesaplanıyor? (★ 0–7)
+#### Yıldız nasıl hesaplanıyor? (⭐ 0–7)
 
 Her sağlanan kriter 1 yıldız:
 
@@ -514,7 +521,7 @@ Her sağlanan kriter 1 yıldız:
 Verisi eksik kriter değerlendirme dışı bırakılır ve o yıldız
 kazanılamaz (ör. bankalarda FD/FAVÖK yoktur — en fazla 6 yıldız
 alabilirler). En az 4 geçerli kriteri olmayan şirkete yıldız
-verilmez ("—"). ★★★★★★★ "al" demek değildir; kalite + nakit +
+verilmez ("—"). ⭐⭐⭐⭐⭐⭐⭐ "al" demek değildir; kalite + nakit +
 büyüme + ucuzluk kombinasyonunun mekanik bir özetidir. Yatırım
 tavsiyesi değildir. Not: FCF kriteri sermaye-yoğun sektörlerde
 (havayolu, enerji, telekom) yatırım fazındaki sağlıklı şirketlere
@@ -537,9 +544,9 @@ Birlikte okuma:
 
 | Yıldız | Skor | Yorum |
 |---|---|---|
-| ★★★★★★★ | 85 | Kaliteli **ve** sektörünün yıldızı |
-| ★★★☆☆☆☆ | 90 | Sektörünün en iyisi ama sektör zayıf (tuzak olabilir) |
-| ★★★★★☆☆ | 40 | İyi şirket ama sektöründe daha cazibi var |
+| ⭐⭐⭐⭐⭐⭐⭐ | 85 | Kaliteli **ve** sektörünün yıldızı |
+| ⭐⭐⭐☆☆☆☆ | 90 | Sektörünün en iyisi ama sektör zayıf (tuzak olabilir) |
+| ⭐⭐⭐⭐⭐☆☆ | 40 | İyi şirket ama sektöründe daha cazibi var |
 
 #### Güvenlik kuralları
 
