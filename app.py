@@ -422,7 +422,7 @@ if "tarama" in st.session_state:
         kriter = pd.DataFrame(index=df.index)
         kriter["roe"] = df["ROE %"] >= 15
         kriter["roic"] = df["ROIC %"] >= 10
-        kriter["nakit"] = cfo_nk >= 0.8
+        kriter["nakit"] = cfo_nk >= 1
         kriter["fcf"] = fcf_ver > 0
         kriter["borc"] = df["Borç / Özkaynak"] <= 1
         kriter["buyume"] = df["EPS Büyüme YY % (TTM)"] > 0
@@ -512,7 +512,7 @@ Her sağlanan kriter 1 yıldız:
 
 1. ROE ≥ %15 (kalite)
 2. ROIC ≥ %10 (kaldıraçsız kalite)
-3. CFO/Net Kâr ≥ 0.8 (kâr nakde dönüşüyor)
+3. CFO/Net Kâr ≥ 1 (kâr nakde dönüşüyor)
 4. FCF Verimi > 0 (yatırımlar sonrası da nakit üretiyor)
 5. Borç/Özkaynak ≤ 1 (bilanço sağlığı)
 6. EPS büyümesi (YY) > 0 (kâr erimiyor — değer tuzağı freni)
@@ -585,7 +585,7 @@ Birlikte okuma:
 
 | Oran | Formül (özü) | Anlamı | İyi olan |
 |---|---|---|---|
-| **CFO/Net Kâr** | Faaliyet nakit akışı / Net kâr | Kâr gerçekten kasaya giriyor mu | 🔼 Yüksek (≥ 0.8) — sürekli < 1 ise kâr kağıt üzerinde olabilir |
+| **CFO/Net Kâr** | Faaliyet nakit akışı / Net kâr | Kâr gerçekten kasaya giriyor mu | 🔼 Yüksek (≥ 1) — sürekli < 1 ise kâr kağıt üzerinde olabilir |
 | **FCF Verimi %** | Serbest nakit akışı / Piyasa değeri | Yatırımlar sonrası kalan nakdin fiyata oranı | 🔼 Yüksek — negatifse şirket nakit yakıyor; sermaye-yoğun sektörlerde yapısal olarak düşüktür, sektörüne göre oku |
 | **Net Borç/FAVÖK** | (Borç − Nakit) / FAVÖK | Borç kaç yıllık faaliyet kârı eder | 🔽 Düşük (≤ 2-3) — **negatif = net nakit**, en sağlamı |
 | **Borç/Özkaynak** | Toplam borç / Özkaynak | Bilanço kaldıracı | 🔽 Düşük (≤ 1) — yüksekse ROE'ye güvenme |
