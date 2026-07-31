@@ -1607,45 +1607,152 @@ def fetch_live_data(symbol, p, i):
 
 # Yıllık finansallar: istikrar kontrolü için (yıldız/skor hesabına GİRMEZ).
 # yfinance genelde son 4 mali yılı verir; bazı sembollerde eksik/boş gelir.
-YILLIK_SATIRLAR = [
-    ("Gelir", "fin", ["Total Revenue", "Operating Revenue"]),
-    ("FAVÖK", "fin", ["EBITDA", "Normalized EBITDA"]),
-    ("Net Kâr", "fin", ["Net Income", "Net Income Common Stockholders"]),
-    ("Faaliyet Nakit Akışı", "cf",
-     ["Operating Cash Flow", "Total Cash From Operating Activities"]),
-    ("Serbest Nakit Akışı", "cf", ["Free Cash Flow"]),
+# Satır adları yfinance sürümüne göre değişebildiği için her satırda
+# alternatif isim listesi tutulur; ilk bulunan kullanılır.
+# fmt: para / yuzde / kat / birim
+YILLIK_GRUPLAR = [
+    ("Gelir Tablosu", "fin", [
+        ("Gelir", ["Total Revenue", "Operating Revenue"], "para"),
+        ("Brüt Kâr", ["Gross Profit"], "para"),
+        ("Faaliyet Kârı", ["Operating Income"], "para"),
+        ("FAVÖK", ["EBITDA", "Normalized EBITDA"], "para"),
+        ("Faiz Gideri", ["Interest Expense"], "para"),
+        ("Vergi Öncesi Kâr", ["Pretax Income"], "para"),
+        ("Vergi Karşılığı", ["Tax Provision"], "para"),
+        ("Net Kâr", ["Net Income", "Net Income Common Stockholders"], "para"),
+        ("Seyreltilmiş EPS", ["Diluted EPS", "Basic EPS"], "birim"),
+        ("Ort. Hisse Sayısı",
+         ["Diluted Average Shares", "Basic Average Shares"], "para"),
+    ]),
+    ("Bilanço", "bs", [
+        ("Toplam Varlıklar", ["Total Assets"], "para"),
+        ("Nakit ve Benzerleri",
+         ["Cash And Cash Equivalents",
+          "Cash Cash Equivalents And Short Term Investments"], "para"),
+        ("Stoklar", ["Inventory"], "para"),
+        ("Ticari Alacaklar", ["Accounts Receivable", "Receivables"], "para"),
+        ("Toplam Borç", ["Total Debt"], "para"),
+        ("Uzun Vadeli Borç", ["Long Term Debt"], "para"),
+        ("Özkaynaklar",
+         ["Stockholders Equity", "Total Equity Gross Minority Interest"],
+         "para"),
+        ("Dağıtılmamış Kârlar", ["Retained Earnings"], "para"),
+    ]),
+    ("Nakit Akışı", "cf", [
+        ("Faaliyet Nakit Akışı",
+         ["Operating Cash Flow", "Total Cash From Operating Activities"],
+         "para"),
+        ("Yatırım Harcaması (CapEx)", ["Capital Expenditure"], "para"),
+        ("Serbest Nakit Akışı", ["Free Cash Flow"], "para"),
+        ("Ödenen Temettü",
+         ["Cash Dividends Paid", "Common Stock Dividend Paid"], "para"),
+        ("Hisse Geri Alımı", ["Repurchase Of Capital Stock"], "para"),
+        ("Alınan Borç", ["Issuance Of Debt"], "para"),
+        ("Ödenen Borç", ["Repayment Of Debt"], "para"),
+    ]),
 ]
+
+# Ham satırlardan türetilenler: (ad, fmt, hesap fonksiyonu)
+# h(ad) -> ilgili ham satır serisi (yoksa NaN serisi)
+YILLIK_TURETILMIS = [
+    ("Brüt Marj %", "yuzde",
+     lambda h: 100 * h("Brüt Kâr") / h("Gelir")),
+    ("Faaliyet Marjı %", "yuzde",
+     lambda h: 100 * h("Faaliyet Kârı") / h("Gelir")),
+    ("Net Marj %", "yuzde",
+     lambda h: 100 * h("Net Kâr") / h("Gelir")),
+    ("FAVÖK / Faiz Gideri", "kat",
+     lambda h: h("FAVÖK") / h("Faiz Gideri").abs()),
+    ("CFO / Net Kâr", "kat",
+     lambda h: h("Faaliyet Nakit Akışı") / h("Net Kâr").where(h("Net Kâr") > 0)),
+    ("Net Borç / FAVÖK", "kat",
+     lambda h: (h("Toplam Borç") - h("Nakit ve Benzerleri"))
+     / h("FAVÖK").where(h("FAVÖK") > 0)),
+    ("Borç / Özkaynak", "kat",
+     lambda h: h("Toplam Borç") / h("Özkaynaklar").where(h("Özkaynaklar") > 0)),
+]
+
+# İstikrar uyarısı verilecek satırlar (negatifse dikkat)
+YILLIK_NEGATIF_UYARI = ("Net Kâr", "Faaliyet Nakit Akışı",
+                        "Serbest Nakit Akışı", "Özkaynaklar")
+
+
+def _yillik_seri(tablo, adaylar) -> pd.Series | None:
+    if tablo is None or getattr(tablo, "empty", True):
+        return None
+    for aday in adaylar:
+        if aday in tablo.index:
+            seri = tablo.loc[aday]
+            if isinstance(seri, pd.DataFrame):    # tekrar eden index adı
+                seri = seri.iloc[0]
+            return pd.to_numeric(seri, errors="coerce")
+    return None
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_yillik_finansallar(symbol: str) -> pd.DataFrame:
+def fetch_yillik_finansallar(symbol: str):
+    """(gruplar, formatlar) döndürür. gruplar: {grup_adı: DataFrame}"""
     try:
         t = yf.Ticker(symbol)
-        tablolar = {"fin": t.financials, "cf": t.cashflow}
+        tablolar = {"fin": t.financials, "bs": t.balance_sheet, "cf": t.cashflow}
     except Exception:
-        return pd.DataFrame()
+        return {}, {}
 
-    satirlar = {}
-    for ad, kaynak, adaylar in YILLIK_SATIRLAR:
-        tablo = tablolar.get(kaynak)
-        if tablo is None or getattr(tablo, "empty", True):
+    ham, fmtler, gruplar = {}, {}, {}
+    for grup_ad, kaynak, satirlar in YILLIK_GRUPLAR:
+        bulunan = {}
+        for ad, adaylar, fmt in satirlar:
+            seri = _yillik_seri(tablolar.get(kaynak), adaylar)
+            if seri is None:
+                continue
+            # CapEx / temettü / geri alım muhasebede negatif (nakit çıkışı)
+            if ad in ("Yatırım Harcaması (CapEx)", "Ödenen Temettü",
+                      "Hisse Geri Alımı", "Ödenen Borç"):
+                seri = seri.abs()
+            bulunan[ad] = seri
+            ham[ad] = seri
+            fmtler[ad] = fmt
+        if bulunan:
+            gruplar[grup_ad] = bulunan
+
+    if not ham:
+        return {}, {}
+
+    yillar = sorted({pd.to_datetime(c).year
+                     for seri in ham.values() for c in seri.index})
+
+    def _hizala(seri):
+        s = seri.copy()
+        s.index = [pd.to_datetime(c).year for c in s.index]
+        s = s[~s.index.duplicated()]
+        return s.reindex(yillar)
+
+    ham_h = {ad: _hizala(s) for ad, s in ham.items()}
+    bos = pd.Series(np.nan, index=yillar)
+
+    def h(ad):
+        return ham_h.get(ad, bos)
+
+    turetilmis = {}
+    for ad, fmt, hesap in YILLIK_TURETILMIS:
+        try:
+            deger = hesap(h).replace([np.inf, -np.inf], np.nan)
+        except Exception:
             continue
-        for aday in adaylar:
-            if aday in tablo.index:
-                seri = tablo.loc[aday]
-                if isinstance(seri, pd.DataFrame):   # tekrar eden index adı
-                    seri = seri.iloc[0]
-                satirlar[ad] = pd.to_numeric(seri, errors="coerce")
-                break
+        if deger.notna().any():
+            turetilmis[ad] = deger
+            fmtler[ad] = fmt
 
-    if not satirlar:
-        return pd.DataFrame()
-
-    d = pd.DataFrame(satirlar).T
-    d.columns = [pd.to_datetime(c).year for c in d.columns]
-    d = d.loc[:, sorted(d.columns)]
-    d = d.dropna(axis=1, how="all")
-    return d
+    cikti = {}
+    for grup_ad, bulunan in gruplar.items():
+        cikti[grup_ad] = pd.DataFrame(
+            {ad: _hizala(s) for ad, s in bulunan.items()}
+        ).T.dropna(axis=1, how="all")
+    if turetilmis:
+        cikti["Türetilmiş Oranlar"] = pd.DataFrame(turetilmis).T.dropna(
+            axis=1, how="all"
+        )
+    return cikti, fmtler
 
 
 def kisa_sayi(v) -> str:
@@ -1663,6 +1770,28 @@ def kisa_sayi(v) -> str:
     return f"{v:,.0f}"
 
 
+def yillik_bicim(v, fmt: str) -> str:
+    if v is None or (isinstance(v, float) and np.isnan(v)):
+        return "—"
+    if fmt == "yuzde":
+        return f"{v:,.1f}%"
+    if fmt == "kat":
+        return f"{v:,.2f}x"
+    if fmt == "birim":
+        return f"{v:,.2f}"
+    return kisa_sayi(v)
+
+
+def yillik_tablo_goster(tablo: pd.DataFrame, fmtler: dict):
+    gorunum = tablo.apply(
+        lambda satir: satir.map(
+            lambda v: yillik_bicim(v, fmtler.get(satir.name, "para"))
+        ),
+        axis=1,
+    )
+    st.dataframe(gorunum, use_container_width=True)
+
+
 PLOTLY_CONFIG = dict(scrollZoom=True, displayModeBar=True,
     modeBarButtonsToAdd=["pan2d", "zoomIn2d", "zoomOut2d", "resetScale2d"],
     modeBarButtonsToRemove=["lasso2d", "select2d"])
@@ -1676,32 +1805,43 @@ def sub_layout(height=250):
 # 8. ANA MANTIK
 # ============================================================
 if ta_calistir and ta_ticker:
-    _fin_y = fetch_yillik_finansallar(ta_ticker)
+    _fin_gruplar, _fin_fmt = fetch_yillik_finansallar(ta_ticker)
     with st.expander(
         f"📅 {ta_ticker} — Yıllık Finansallar (istikrar kontrolü)", expanded=True
     ):
-        if _fin_y.empty:
+        if not _fin_gruplar:
             st.caption(
                 "Yahoo Finance bu sembol için yıllık finansal tablo vermiyor."
             )
         else:
-            st.dataframe(
-                _fin_y.apply(lambda kol: kol.map(kisa_sayi)),
-                use_container_width=True,
-            )
+            # Negatif yıl uyarıları (istikrar): tüm gruplarda ara
             _uyari = []
-            for _ad in ("Net Kâr", "Serbest Nakit Akışı"):
-                if _ad in _fin_y.index:
-                    _neg = [str(y) for y in _fin_y.columns if _fin_y.loc[_ad, y] < 0]
-                    if _neg:
-                        _uyari.append(f"**{_ad}** negatif: {', '.join(_neg)}")
+            for _tablo in _fin_gruplar.values():
+                for _ad in YILLIK_NEGATIF_UYARI:
+                    if _ad in _tablo.index:
+                        _satir = _tablo.loc[_ad]
+                        _neg = [str(y) for y in _satir.index
+                                if pd.notna(_satir[y]) and _satir[y] < 0]
+                        if _neg:
+                            _uyari.append(f"**{_ad}** negatif: {', '.join(_neg)}")
             if _uyari:
-                st.warning("⚠️ " + " · ".join(_uyari))
+                st.warning("⚠️ " + "  \n".join(_uyari))
             else:
-                st.success("✅ Tablodaki yılların hepsinde net kâr ve FCF pozitif.")
+                st.success(
+                    "✅ Net kâr, nakit akışları ve özkaynak tablodaki tüm "
+                    "yıllarda pozitif."
+                )
+
+            for _grup_ad, _tablo in _fin_gruplar.items():
+                st.markdown(f"**{_grup_ad}**")
+                yillik_tablo_goster(_tablo, _fin_fmt)
+
             st.caption(
                 "Yıldız ve Sektör Skoru hesabına girmez — istikrarı gözle "
-                "değerlendirmek için. Kaynak: Yahoo Finance yıllık tabloları."
+                "değerlendirmek için. Boş satırlar (—) Yahoo Finance'ın o "
+                "sembol için vermediği kalemlerdir; bankalarda FAVÖK/CapEx "
+                "gibi kalemler tanımlı değildir. Kaynak: Yahoo Finance "
+                "yıllık tabloları."
             )
 
     df = fetch_live_data(ta_ticker, period, interval)
