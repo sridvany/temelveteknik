@@ -7,7 +7,7 @@ import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
 
-st.set_page_config(page_title="Temel Analiz", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Ücretsiz Temel ve Teknik Analiz", page_icon="📊", layout="wide")
 
 # Sekme yazı stili
 st.markdown("""
@@ -286,7 +286,11 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
     return df_son, son_hata
 
 
-st.title("📊 Temel Analiz")
+st.title("Ücretsiz Temel ve Teknik Analiz")
+st.caption("Eğitim amaçlıdır. Yatırım tavsiyesi içermez. Veri kaynakları Yahoo Finance ve Tradingview'dir.")
+st.divider()
+
+st.header("📊 Temel Analiz")
 
 
 # Türkçe karakter farkını aşmak için sıralama anahtarı
@@ -436,7 +440,7 @@ if "tarama" in st.session_state:
         gecerli_sayisi = gecerli.sum(axis=1)
         yildiz_sayi = puan.where(gecerli_sayisi >= 4)
         df["Yıldız"] = yildiz_sayi.map(
-            lambda s: "—" if pd.isna(s) else "⭐" * int(s) + "☆" * (7 - int(s))
+            lambda s: "—" if pd.isna(s) else "★" * int(s) + "☆" * (7 - int(s))
         )
 
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
@@ -646,10 +650,23 @@ for k, v in _defaults.items():
 # ============================================================
 with st.sidebar:
     st.header("⚙️ Teknik Analiz Ayarları")
-    ta_ticker = st.text_input("Ticker Sembolü (örn. ASELS.IS, AAPL, GC=F):", "")
+
+    st.markdown(
+        """
+        **Ticker sembolünü öğrenmek için:**  
+        <a href="https://finance.yahoo.com/lookup" target="_blank">
+            finance.yahoo.com/lookup
+        </a>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    ta_ticker = st.text_input("Ticker Sembolü", "")
+
     if st.button("🔍 Analiz Et", type="primary", use_container_width=True):
         st.session_state["ta_aktif"] = True
         st.session_state["ta_ticker_secili"] = ta_ticker
+
     # Buton bir kez basıldıktan sonra slider değişikliklerinde de analiz açık kalsın.
     ta_calistir = st.session_state.get("ta_aktif", False)
     ta_ticker = st.session_state.get("ta_ticker_secili", ta_ticker)
