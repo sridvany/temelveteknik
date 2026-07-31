@@ -440,7 +440,7 @@ if "tarama" in st.session_state:
         gecerli_sayisi = gecerli.sum(axis=1)
         yildiz_sayi = puan.where(gecerli_sayisi >= 4)
         df["Yıldız"] = yildiz_sayi.map(
-            lambda s: "—" if pd.isna(s) else "★" * int(s) + "☆" * (7 - int(s))
+            lambda s: "—" if pd.isna(s) else "⭐" * int(s) + "☆" * (7 - int(s))
         )
 
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
