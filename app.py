@@ -1812,7 +1812,7 @@ def sub_layout(height=250):
 if ta_calistir and ta_ticker:
     _fin_gruplar, _fin_fmt = fetch_yillik_finansallar(ta_ticker)
     with st.expander(
-        f"📅 {ta_ticker} — Yıllık Finansallar (istikrar kontrolü)", expanded=False
+        f"📅 {ta_ticker} — Yıllık Finansallar (istikrar kontrolü için tıklayınız)", expanded=False
     ):
         if not _fin_gruplar:
             st.caption(
