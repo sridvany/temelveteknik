@@ -1663,6 +1663,9 @@ YILLIK_TURETILMIS = [
      lambda h: 100 * h("Net Kâr") / h("Gelir")),
     ("ROE %", "yuzde",
      lambda h: 100 * h("Net Kâr") / h("Özkaynaklar").where(h("Özkaynaklar") > 0)),
+    ("ROA %", "yuzde",
+     lambda h: 100 * h("Net Kâr") / h("Toplam Varlıklar").where(
+         h("Toplam Varlıklar") > 0)),
     ("FAVÖK / Faiz Gideri", "kat",
      lambda h: h("FAVÖK") / h("Faiz Gideri").abs()),
     ("CFO / Net Kâr", "kat",
