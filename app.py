@@ -1661,6 +1661,8 @@ YILLIK_TURETILMIS = [
      lambda h: 100 * h("Faaliyet Kârı") / h("Gelir")),
     ("Net Marj %", "yuzde",
      lambda h: 100 * h("Net Kâr") / h("Gelir")),
+    ("ROE %", "yuzde",
+     lambda h: 100 * h("Net Kâr") / h("Özkaynaklar").where(h("Özkaynaklar") > 0)),
     ("FAVÖK / Faiz Gideri", "kat",
      lambda h: h("FAVÖK") / h("Faiz Gideri").abs()),
     ("CFO / Net Kâr", "kat",
@@ -1807,7 +1809,7 @@ def sub_layout(height=250):
 if ta_calistir and ta_ticker:
     _fin_gruplar, _fin_fmt = fetch_yillik_finansallar(ta_ticker)
     with st.expander(
-        f"📅 {ta_ticker} — Yıllık Finansallar (istikrar kontrolü için basınız)", expanded=False
+        f"📅 {ta_ticker} — Yıllık Finansallar (istikrar kontrolü)", expanded=False
     ):
         if not _fin_gruplar:
             st.caption(
