@@ -1583,7 +1583,11 @@ def sig_wavetrend_fn(high, low, close, rsi_series, rsi_ma_series, n1=10, n2=21, 
 def fetch_live_data(symbol, p, i):
     try:
         fetch_i = "1h" if i in ("4h", "8h") else i
-        data = yf.download(symbol, period=p, interval=fetch_i, progress=False)
+        # auto_adjust=False: Yahoo düzeltme katsayısını (temettü/bedelsiz) yalnızca
+        # günlük ve üstü barlara uygular, intraday'e uygulamaz. Varsayılan True iken
+        # 1d kapanışı düzeltilmiş, 1h/4h kapanışı ham geliyor ve ikisi çelişiyordu.
+        data = yf.download(symbol, period=p, interval=fetch_i, progress=False,
+                           auto_adjust=False)
         if data is None or data.empty:
             return pd.DataFrame()
         if i in ("4h", "8h"):
