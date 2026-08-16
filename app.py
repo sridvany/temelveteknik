@@ -450,6 +450,46 @@ if "tarama" in st.session_state:
             lambda s: "—" if pd.isna(s) else "⭐" * int(s) + "☆" * (7 - int(s))
         )
 
+        # --- Bayraklar: yıldızı düşürmez, yıldızın güvenilirliğini sorgular ---
+        # Yıldız kriterlerinin girdileri (ROE, F/K, FCF, EPS büyümesi) bazı
+        # şirketlerde yapısal olarak bozuk. Bu dört tetik onları işaretler.
+        _net_kar = df["Net Kar (TTM)"]
+        _faal_gelir = df["Faaliyet Geliri (TTM)"]
+        _cfo = df["Faaliyet Nakit Akışı (TTM)"]
+        _capex = df["Yatırım Harcamaları / CapEx (TTM)"]
+        _fcf = df["Serbest Nakit Akışı (TTM)"]
+        _brut = df["Brüt Kar (TTM)"]
+
+        # kâr: net kâr faaliyet gelirini aşıyor -> kâr esas işten gelmiyor,
+        # ROE/ROIC/F/K'nın tamamı faaliyet dışı gelirle şişmiş demektir.
+        bayrak_kar = _net_kar > _faal_gelir
+        # fcf: bildirilen FCF, CFO - CapEx ile tutmuyor -> veri kalitesi sorunu.
+        bayrak_fcf = (
+            ((_cfo - _capex) / _fcf.where(_fcf != 0) - 1).abs() > 0.10
+        ) & _fcf.notna()
+        # eps: baz yıl sıfıra yakınken büyüme oranı anlamsız büyüklüğe çıkıyor,
+        # "EPS büyümesi > 0" kriteri gürültüyle sağlanıyor.
+        bayrak_eps = df["EPS Büyüme YY % (TTM)"].abs() > 300
+        # oran: brüt kâr yoksa veya finans sektörüyse marj oranları, FD/FAVÖK ve
+        # Net Borç/FAVÖK yapısal olarak geçersiz (bankada faiz gideri ana maliyet).
+        bayrak_oran = (
+            _brut.isna() | (_brut <= 0)
+            | df["Sektör"].astype(str).str.contains("Finans", na=False)
+        )
+
+        BAYRAKLAR = [
+            ("⚠kâr", bayrak_kar), ("⚠fcf", bayrak_fcf),
+            ("⚠eps", bayrak_eps), ("⚠oran", bayrak_oran),
+        ]
+        bayrak_df = pd.DataFrame(
+            {ad: t.fillna(False).astype(bool) for ad, t in BAYRAKLAR}
+        )
+        df["Bayrak"] = bayrak_df.apply(
+            lambda r: " ".join(bayrak_df.columns[r]) if r.any() else "✓", axis=1
+        )
+        df["_yildiz_sayi"] = yildiz_sayi
+        df["_bayrakli"] = bayrak_df.any(axis=1)
+
         # Yıldız kolonu Özet dışındaki sekmelerde de görünsün (Şirket'ten sonra)
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
         ortak_adlar = ortak_adlar[:2] + ["Yıldız"] + ortak_adlar[2:]
@@ -482,6 +522,122 @@ if "tarama" in st.session_state:
             file_name=f"{market}_Finansallar.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+        # --- Temiz Liste: yüksek yıldız + hiç bayrak yok ---
+        st.divider()
+        st.subheader("🏅 Temiz Liste")
+        st.caption(
+            "Yıldız eşiğini geçen **ve** dört bayrağın hiçbirini almayan "
+            "şirketler. Kolonlar Özet sekmesiyle birebir aynı."
+        )
+        min_yildiz = st.slider("Minimum yıldız", 1, 7, 7, key="temiz_yildiz")
+        temiz = df[(df["_yildiz_sayi"] >= min_yildiz) & ~df["_bayrakli"]]
+        if temiz.empty:
+            elenen = int((df["_yildiz_sayi"] >= min_yildiz).sum())
+            st.info(
+                f"{min_yildiz}+ yıldızlı {elenen} şirketin tamamı en az bir "
+                "bayrak aldı. Eşiği düşürmeyi dene."
+            )
+        else:
+            st.success(
+                f"{len(temiz)} şirket temiz "
+                f"({int((df['_yildiz_sayi'] >= min_yildiz).sum())} şirket "
+                f"{min_yildiz}+ yıldızlı)."
+            )
+            st.dataframe(temiz[OZET_ADLARI], use_container_width=True)
+            buf2 = io.BytesIO()
+            with pd.ExcelWriter(buf2, engine="xlsxwriter") as w2:
+                temiz[OZET_ADLARI].to_excel(
+                    w2, index=False, sheet_name="Temiz Liste"
+                )
+            st.download_button(
+                label="📥 Temiz Listeyi İndir",
+                data=buf2.getvalue(),
+                file_name=f"{market}_Temiz_Liste.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="temiz_indir",
+            )
+
+        with st.expander("📘 Temiz Liste ne anlatıyor?"):
+            st.markdown("""
+#### Neden eklendi?
+
+Yıldız sistemi piyasa genelinde iyi ayrıştırıyor — şirketlerin yalnızca
+küçük bir kısmı 7 yıldız alıyor. Sorun şu ki **tepedeki grubu kendi
+içinde hiç ayırt edemiyor**: hepsi 7/7 görünüyor, aralarında seçim
+yapmak için hiçbir bilgi kalmıyor.
+
+Bunun sebebi, yıldız kriterlerinin bazı şirketlerde **girdisinin bozuk
+olması**. Örnek: net kârı faaliyetinden değil elindeki nakdin faizinden
+gelen bir şirkette ROE %16 çıkar, F/K düşük görünür, "kaliteli ve ucuz"
+diye 7 yıldız alır — ama ölçtüğün şey esas iş değil, mevduat getirisidir.
+
+#### Bu tablo ne yapıyor?
+
+Bayraklar **kriterleri değil, kriterlerin girdilerini** denetler.
+Yıldız hesabına hiç dokunmaz; sadece "bu yıldız güvenilir mi?" sorusunu
+ayrı bir kolonda cevaplar. Temiz Liste de eşiği geçip hiç bayrak
+almayanları süzer.
+
+Yani mantık şu:
+
+| | Anlamı |
+|---|---|
+| Yüksek yıldız + temiz | Ölçümler tutarlı, yıldıza güvenilebilir |
+| Yüksek yıldız + bayrak | Yıldız yüksek ama **dayandığı veri sorunlu** |
+| Düşük yıldız | Zaten kriterleri geçemiyor |
+
+#### Nasıl okunmalı?
+
+- **Temiz olmak "al" demek değildir.** Sadece finansal tablonun kendi
+  içinde tutarlı olduğunu, ölçtüğün oranların gerçekten ölçmek istediğin
+  şeyi ölçtüğünü söyler.
+- **Bayraklı olmak "kötü şirket" demek değildir.** "Bu şirketi tabloya
+  bakarak değerlendirme, dipnotlara bak" demektir. Bayraklı bir şirket
+  pekâlâ iyi olabilir — ama bunu bu ekrandan anlayamazsın.
+- Temiz liste kısaysa bu bir hata değil, amacın kendisidir. Eşiği
+  düşürerek listeyi genişletebilirsin.
+
+#### Neleri göremez?
+
+- **Enflasyon muhasebesi (TMS 29):** net parasal pozisyon kazancı, net
+  borçlu şirketlerde net kârı faaliyet gelirinin üstüne **meşru şekilde**
+  çıkarabilir. Bu durumda ⚠kâr yanlış alarm verir. Şirket net nakit
+  pozisyonundayken ise mazeret geçersizdir — Bilanço sekmesindeki Net
+  Borç kolonuna bakarak ayırt edebilirsin.
+- **⚠oran tüm finans sektörünü keser.** Sağlam bir banka da listeye
+  giremez; oranlar o iş modeli için tanımsız olduğu için.
+- Ölçek, işlem hacmi, ortaklık yapısı, sektörün geleceği, yönetim
+  kalitesi — hiçbiri bu tabloda yok. Bayraklar **veriye** bakar,
+  **işe** bakmaz.
+- Tek dönem (TTM) fotoğrafıdır; istikrar veya trend göstermez.
+""")
+
+        with st.expander("🚩 Bayraklar ne anlama geliyor?"):
+            bayrak_sayilari = {
+                ad: int(t.fillna(False).sum()) for ad, t in BAYRAKLAR
+            }
+            st.markdown(f"""
+Bayrak **yıldız düşürmez** — yıldızın dayandığı verinin güvenilir olup
+olmadığını söyler. Tarama sonucundaki dağılım ({len(df)} şirket):
+
+- **⚠kâr** ({bayrak_sayilari['⚠kâr']} şirket): Net Kâr > Faaliyet Geliri.
+  Kâr esas faaliyetten gelmiyor; ROE, ROIC ve F/K faaliyet dışı gelirle
+  şişmiş demektir.
+- **⚠fcf** ({bayrak_sayilari['⚠fcf']} şirket): Bildirilen Serbest Nakit
+  Akışı, CFO − CapEx ile %10'dan fazla sapıyor. Veri kalitesi sorunu;
+  FCF Verimi olduğundan yüksek görünebilir.
+- **⚠eps** ({bayrak_sayilari['⚠eps']} şirket): |EPS Büyüme YY| > %300.
+  Baz yıl sıfıra yakın olduğunda oran anlamsız büyür ve "EPS büyümesi > 0"
+  kriteri gürültüyle sağlanır.
+- **⚠oran** ({bayrak_sayilari['⚠oran']} şirket): Brüt kâr raporlanmıyor
+  veya sektör Finans. Marj oranları, FD/FAVÖK ve Net Borç/FAVÖK yapısal
+  olarak geçersiz (bankada/aracı kurumda faiz gideri ana maliyet kalemidir,
+  FAVÖK bunu dışlar).
+
+Temiz Liste tablosu, seçilen yıldız eşiğini geçip bu dördünden hiçbirini
+almayan şirketleri gösterir.
+""")
 
         with st.expander("📖 Yıldız ve Sektör Skoru Nasıl Çalışır?"):
             st.markdown("""
