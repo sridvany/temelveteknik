@@ -559,7 +559,10 @@ if "tarama" in st.session_state:
             )
 
         with st.expander("📘 Temiz Liste ne anlatıyor?"):
-            st.markdown("""
+            bayrak_sayilari = {
+                ad: int(t.fillna(False).sum()) for ad, t in BAYRAKLAR
+            }
+            st.markdown(f"""
 #### Neden eklendi?
 
 Yıldız sistemi piyasa genelinde iyi ayrıştırıyor — şirketlerin yalnızca
