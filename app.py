@@ -563,17 +563,33 @@ if "tarama" in st.session_state:
                 ad: int(t.fillna(False).sum()) for ad, t in BAYRAKLAR
             }
             st.markdown(f"""
-#### Neden eklendi?
+#### Listedeki şirketlerin özellikleri
 
-Yıldız sistemi piyasa genelinde iyi ayrıştırıyor — şirketlerin yalnızca
-küçük bir kısmı 7 yıldız alıyor. Sorun şu ki **tepedeki grubu kendi
-içinde hiç ayırt edemiyor**: hepsi 7/7 görünüyor, aralarında seçim
-yapmak için hiçbir bilgi kalmıyor.
+Şu an yıldız eşiği **{min_yildiz}/7**. Bu listeye giren bir şirket
+aşağıdaki yedi kriterden en az {min_yildiz} tanesini sağlıyor:
 
-Bunun sebebi, yıldız kriterlerinin bazı şirketlerde **girdisinin bozuk
-olması**. Örnek: net kârı faaliyetinden değil elindeki nakdin faizinden
-gelen bir şirkette ROE %16 çıkar, F/K düşük görünür, "kaliteli ve ucuz"
-diye 7 yıldız alır — ama ölçtüğün şey esas iş değil, mevduat getirisidir.
+1. **ROE ≥ %15** — özkaynak kârlılığı yüksek
+2. **ROIC ≥ %10** — kârlılık kaldıraçtan değil, gerçek sermaye
+   verimliliğinden geliyor
+3. **CFO/Net Kâr ≥ 1** — kâğıt üzerindeki kâr nakde dönüşüyor
+4. **FCF Verimi > 0** — yatırım harcamalarından sonra da nakit üretiyor
+5. **Borç/Özkaynak ≤ 1** — bilanço sağlam
+6. **EPS büyümesi (YY) > 0** — hisse başına kâr erimiyor
+7. **F/K ve FD/FAVÖK sektör medyanının altında** — emsallerine göre ucuz
+
+Bunlara **ek olarak** dört bayrağın hiçbirini almıyor, yani:
+
+- **Kârı esas faaliyetinden geliyor** — net kâr faaliyet gelirini aşmıyor,
+  kârlılık faiz/kur/tek seferlik kalemlerden değil işin kendisinden
+- **Nakit verisi tutarlı** — bildirilen serbest nakit akışı,
+  CFO − CapEx hesabıyla örtüşüyor
+- **Büyümesi gerçek** — EPS büyüme oranı sıfıra yakın bir bazdan
+  kaynaklanan yapay bir sıçrama değil
+- **Oranları geçerli** — brüt kâr raporluyor ve finans dışı bir iş modeli,
+  dolayısıyla marjlar, FD/FAVÖK ve Net Borç/FAVÖK anlamlı hesaplanıyor
+
+Özetle: kârlı, borçsuz, nakit üreten, sektörüne göre ucuz — **ve bu
+ölçümlerin her biri finansal tablolarla doğrulanabilir** şirketler.
 
 #### Bu tablo ne yapıyor?
 
