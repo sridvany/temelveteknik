@@ -528,7 +528,7 @@ if "tarama" in st.session_state:
         st.subheader("🏅 Temiz Liste")
         st.caption(
             "Yıldız eşiğini geçen **ve** dört bayrağın hiçbirini almayan "
-            "şirketler. Kolonlar Özet sekmesiyle birebir aynı."
+            "şirketler. Sekmeler ve kolonlar üstteki ana tabloyla birebir aynı."
         )
         min_yildiz = st.slider("Minimum yıldız", 1, 7, 7, key="temiz_yildiz")
         temiz = df[(df["_yildiz_sayi"] >= min_yildiz) & ~df["_bayrakli"]]
@@ -544,12 +544,29 @@ if "tarama" in st.session_state:
                 f"({int((df['_yildiz_sayi'] >= min_yildiz).sum())} şirket "
                 f"{min_yildiz}+ yıldızlı)."
             )
-            st.dataframe(temiz[OZET_ADLARI], use_container_width=True)
+            # Ana tablodaki dört sekmenin aynısı, sadece temiz şirketler için
+            temiz_sayfalar = {
+                "Özet": temiz[OZET_ADLARI],
+                "Gelir Tablosu": temiz[
+                    ortak_adlar + [k[1] for k in GELIR_KOLONLARI]
+                ],
+                "Bilanço": temiz[
+                    ortak_adlar + [k[1] for k in BILANCO_KOLONLARI]
+                ],
+                "Nakit Akışı": temiz[
+                    ortak_adlar + [k[1] for k in NAKIT_KOLONLARI]
+                ],
+            }
+            for sekme, veri in zip(
+                st.tabs(list(temiz_sayfalar)), temiz_sayfalar.values()
+            ):
+                with sekme:
+                    st.dataframe(veri, use_container_width=True)
+
             buf2 = io.BytesIO()
             with pd.ExcelWriter(buf2, engine="xlsxwriter") as w2:
-                temiz[OZET_ADLARI].to_excel(
-                    w2, index=False, sheet_name="Temiz Liste"
-                )
+                for ad, veri in temiz_sayfalar.items():
+                    veri.to_excel(w2, index=False, sheet_name=ad)
             st.download_button(
                 label="📥 Temiz Listeyi İndir",
                 data=buf2.getvalue(),
