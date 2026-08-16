@@ -545,9 +545,11 @@ if "tarama" in st.session_state:
                 f"{min_yildiz}+ yıldızlı)."
             )
             # Ana tablodaki dört sekmenin aynısı, sadece temiz şirketler için.
-            # Yıldız / Ülke / Borsa / Para Birimi çıkarıldı: hepsi üstteki
-            # ana tabloda zaten var, burada yer kaplıyor.
-            GIZLI = {"Yıldız", "Ülke", "Borsa", "Para Birimi"}
+            # Yıldız / Sektör Skoru / Ülke / Borsa / Para Birimi çıkarıldı:
+            # hepsi üstteki ana tabloda zaten var, burada yer kaplıyor.
+            GIZLI = {
+                "Yıldız", "Sektör Skoru", "Ülke", "Borsa", "Para Birimi",
+            }
             temiz_ortak = [a for a in ortak_adlar if a not in GIZLI]
             temiz_sayfalar = {
                 "Özet": temiz[[a for a in OZET_ADLARI if a not in GIZLI]],
