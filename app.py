@@ -450,7 +450,9 @@ if "tarama" in st.session_state:
             lambda s: "—" if pd.isna(s) else "⭐" * int(s) + "☆" * (7 - int(s))
         )
 
+        # Yıldız kolonu Özet dışındaki sekmelerde de görünsün (Şirket'ten sonra)
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
+        ortak_adlar = ortak_adlar[:2] + ["Yıldız"] + ortak_adlar[2:]
         df_ozet = df[OZET_ADLARI]
         df_gelir = df[ortak_adlar + [k[1] for k in GELIR_KOLONLARI]]
         df_bilanco = df[ortak_adlar + [k[1] for k in BILANCO_KOLONLARI]]
