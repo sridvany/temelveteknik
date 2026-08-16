@@ -590,6 +590,40 @@ Yani mantık şu:
 | Yüksek yıldız + bayrak | Yıldız yüksek ama **dayandığı veri sorunlu** |
 | Düşük yıldız | Zaten kriterleri geçemiyor |
 
+#### Dört bayrak
+
+Parantez içindeki sayılar bu taramadaki ({len(df)} şirket) dağılımdır.
+Bir şirket birden fazla bayrak alabilir.
+
+**⚠kâr — Net Kâr > Faaliyet Geliri** ({bayrak_sayilari['⚠kâr']} şirket)
+Kâr esas faaliyetten gelmiyor demektir. Net marjın brüt marjı aşması
+bunun en çarpıcı halidir: faaliyet dışı gelirler, tüm faaliyet
+giderlerinden büyük. Böyle bir şirkette ROE, ROIC ve F/K'nın hepsi
+aynı anda yanıltır — çünkü hepsinin payında aynı şişmiş net kâr vardır.
+
+**⚠fcf — Bildirilen FCF, CFO − CapEx ile tutmuyor** ({bayrak_sayilari['⚠fcf']} şirket)
+Sapma %10'u geçiyor. Genellikle CapEx kaleminde FCF hesabına girmeyen
+bir bileşen (ör. aktifleştirilen geliştirme gideri, satın alma) olduğu
+anlamına gelir. Sonuç: FCF Verimi olduğundan yüksek görünür ve
+4. yıldız kriteri hak edilmeden kazanılır.
+
+**⚠eps — |EPS Büyüme YY| > %300** ({bayrak_sayilari['⚠eps']} şirket)
+Baz yıl sıfıra yakınken yüzde değişim mekanik olarak patlar; %75.000'lik
+bir büyüme oranı "çok büyüdü" demek değil, "geçen yıl neredeyse hiç kâr
+yoktu" demektir. 6. kriter ("EPS büyümesi > 0") bu durumda gürültüyle
+sağlanır, bilgi taşımaz.
+
+**⚠oran — Brüt kâr yok veya sektör Finans** ({bayrak_sayilari['⚠oran']} şirket)
+Bu iş modellerinde marj oranları, FD/FAVÖK ve Net Borç/FAVÖK tanımsızdır.
+Bankada ve aracı kurumda **faiz gideri ana maliyet kalemidir**, FAVÖK ise
+onu dışlar — dolayısıyla düşük FD/FAVÖK "ucuz" anlamına gelmez, sadece
+yanlış hesaplanmış demektir. Aynı sebeple net borç da bir zayıflık
+göstergesi değil, işin gereğidir.
+
+İki tetiği birlikte kullanmak gerekiyor: finans sektöründeki şirketlerin
+bir kısmı brüt kâr raporlar, brüt kâr raporlamayan şirketlerin bir kısmı
+da finans dışıdır. Tek başına hiçbiri yeterli olmuyor.
+
 #### Nasıl okunmalı?
 
 - **Temiz olmak "al" demek değildir.** Sadece finansal tablonun kendi
@@ -614,32 +648,6 @@ Yani mantık şu:
   kalitesi — hiçbiri bu tabloda yok. Bayraklar **veriye** bakar,
   **işe** bakmaz.
 - Tek dönem (TTM) fotoğrafıdır; istikrar veya trend göstermez.
-""")
-
-        with st.expander("🚩 Bayraklar ne anlama geliyor?"):
-            bayrak_sayilari = {
-                ad: int(t.fillna(False).sum()) for ad, t in BAYRAKLAR
-            }
-            st.markdown(f"""
-Bayrak **yıldız düşürmez** — yıldızın dayandığı verinin güvenilir olup
-olmadığını söyler. Tarama sonucundaki dağılım ({len(df)} şirket):
-
-- **⚠kâr** ({bayrak_sayilari['⚠kâr']} şirket): Net Kâr > Faaliyet Geliri.
-  Kâr esas faaliyetten gelmiyor; ROE, ROIC ve F/K faaliyet dışı gelirle
-  şişmiş demektir.
-- **⚠fcf** ({bayrak_sayilari['⚠fcf']} şirket): Bildirilen Serbest Nakit
-  Akışı, CFO − CapEx ile %10'dan fazla sapıyor. Veri kalitesi sorunu;
-  FCF Verimi olduğundan yüksek görünebilir.
-- **⚠eps** ({bayrak_sayilari['⚠eps']} şirket): |EPS Büyüme YY| > %300.
-  Baz yıl sıfıra yakın olduğunda oran anlamsız büyür ve "EPS büyümesi > 0"
-  kriteri gürültüyle sağlanır.
-- **⚠oran** ({bayrak_sayilari['⚠oran']} şirket): Brüt kâr raporlanmıyor
-  veya sektör Finans. Marj oranları, FD/FAVÖK ve Net Borç/FAVÖK yapısal
-  olarak geçersiz (bankada/aracı kurumda faiz gideri ana maliyet kalemidir,
-  FAVÖK bunu dışlar).
-
-Temiz Liste tablosu, seçilen yıldız eşiğini geçip bu dördünden hiçbirini
-almayan şirketleri gösterir.
 """)
 
         with st.expander("📖 Yıldız ve Sektör Skoru Nasıl Çalışır?"):
