@@ -544,17 +544,21 @@ if "tarama" in st.session_state:
                 f"({int((df['_yildiz_sayi'] >= min_yildiz).sum())} şirket "
                 f"{min_yildiz}+ yıldızlı)."
             )
-            # Ana tablodaki dört sekmenin aynısı, sadece temiz şirketler için
+            # Ana tablodaki dört sekmenin aynısı, sadece temiz şirketler için.
+            # Yıldız / Ülke / Borsa / Para Birimi çıkarıldı: hepsi üstteki
+            # ana tabloda zaten var, burada yer kaplıyor.
+            GIZLI = {"Yıldız", "Ülke", "Borsa", "Para Birimi"}
+            temiz_ortak = [a for a in ortak_adlar if a not in GIZLI]
             temiz_sayfalar = {
-                "Özet": temiz[OZET_ADLARI],
+                "Özet": temiz[[a for a in OZET_ADLARI if a not in GIZLI]],
                 "Gelir Tablosu": temiz[
-                    ortak_adlar + [k[1] for k in GELIR_KOLONLARI]
+                    temiz_ortak + [k[1] for k in GELIR_KOLONLARI]
                 ],
                 "Bilanço": temiz[
-                    ortak_adlar + [k[1] for k in BILANCO_KOLONLARI]
+                    temiz_ortak + [k[1] for k in BILANCO_KOLONLARI]
                 ],
                 "Nakit Akışı": temiz[
-                    ortak_adlar + [k[1] for k in NAKIT_KOLONLARI]
+                    temiz_ortak + [k[1] for k in NAKIT_KOLONLARI]
                 ],
             }
             for sekme, veri in zip(
