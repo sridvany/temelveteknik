@@ -152,7 +152,7 @@ GELIR_KOLONLARI = [
     ("price_earnings_growth_ttm", "PEG"),
     ("enterprise_value_to_revenue_ttm", "FD/Gelir"),
     ("return_on_assets_fq", "ROA %"),
-    ("dividend_yield_recent", "Tem. Verimi %"),
+    ("dividends_yield_current", "Tem. Verimi %"),
     ("earnings_release_date", "Son Bilanço"),
     ("earnings_release_next_date", "Sonraki Bilanço"),
 ]
@@ -230,7 +230,8 @@ TUM_KOLONLAR = (
 
 
 @st.cache_data(ttl=3600)
-def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
+def veri_cek_v5(market: str, country: str, sadece_yerli: bool,
+                otc_haric: bool, min_pd: float, kolonlar: tuple):
     url = f"https://scanner.tradingview.com/{market}/scan"
     headers = {
         "authority": "scanner.tradingview.com",
@@ -244,13 +245,27 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
     api_alanlari = [k[0] for k in kolonlar]
     gosterim_adlari = [k[1] for k in kolonlar]
 
-    filtreler = [{"left": "type", "operation": "equal", "right": "stock"}]
+    filtreler = [
+        {"left": "type", "operation": "equal", "right": "stock"},
+        # Tercihli hisseler de "stock" tipinde gelir; ana şirketin
+        # finansallarını tercihli fiyatıyla eşleştirip F/K, PD/DD, PEG'i bozar.
+        {"left": "typespecs", "operation": "has_none_of", "right": ["preferred"]},
+    ]
     if sadece_yerli:
         filtreler.append(
             {"left": "country", "operation": "equal", "right": country}
         )
+    if otc_haric:
+        filtreler.append(
+            {"left": "exchange", "operation": "nequal", "right": "OTC"}
+        )
+    if min_pd > 0:
+        filtreler.append(
+            {"left": "market_cap_basic", "operation": "egreater", "right": min_pd}
+        )
 
     all_rows = []
+    gorulen = set()
     son_hata = None
     start, adim = 0, 500
     while True:
@@ -259,7 +274,10 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
             "markets": [market],
             "filter": filtreler,
             "range": [start, start + adim],
-            "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
+            # Sayfalama benzersiz alana göre: piyasa değeri boş satırlarda
+            # sıra sayfadan sayfaya değiştiği için mükerrer/eksik satır oluşuyordu.
+            # Piyasa değeri sıralaması aşağıda pandas'ta yapılır.
+            "sort": {"sortBy": "name", "sortOrder": "asc"},
         }
         res = requests.post(url, headers=headers, json=payload, timeout=20)
         if res.status_code != 200:
@@ -269,6 +287,11 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
         if not data:
             break
         for item in data:
+            sembol = item.get("s")
+            if sembol is not None:
+                if sembol in gorulen:
+                    continue
+                gorulen.add(sembol)
             d = item["d"]
             row = dict(zip(gosterim_adlari, d))
             row["Sektör"] = SEKTOR_TR.get(row.get("Sektör"), row.get("Sektör") or "")
@@ -283,6 +306,9 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool, kolonlar: tuple):
     df_son = pd.DataFrame(all_rows, columns=gosterim_adlari)
     # Olası çift kolon adlarını temizle
     df_son = df_son.loc[:, ~df_son.columns.duplicated()]
+    df_son = df_son.sort_values(
+        "Piyasa Değeri", ascending=False, na_position="last", kind="stable"
+    ).reset_index(drop=True)
     return df_son, son_hata
 
 
@@ -316,9 +342,21 @@ sadece_yerli = st.checkbox(
 
 market, country = PIYASALAR[secim]
 
+otc_haric = False
+if market == "america":
+    otc_haric = st.checkbox(
+        "OTC hisselerini hariç tut (mikro-cap / kabuk şirket gürültüsü)",
+        value=True,
+    )
+min_pd_milyon = st.number_input(
+    "Min. piyasa değeri (yerel para birimi, milyon) — 0 = filtre yok",
+    min_value=0.0, value=0.0, step=50.0,
+)
+
 if st.button("Piyasayı Tara ve Verileri Getir"):
     st.session_state["tarama"] = veri_cek_v5(
-        market, country, sadece_yerli, tuple(TUM_KOLONLAR)
+        market, country, sadece_yerli, otc_haric,
+        float(min_pd_milyon) * 1e6, tuple(TUM_KOLONLAR)
     )
 
 if "tarama" in st.session_state:
@@ -388,8 +426,15 @@ if "tarama" in st.session_state:
         # NaN'lar (ör. temettü vermeyenler) medyana zaten katılmaz.
         # Sektörde geçerli verisi olan en az 3 şirket yoksa medyan boş
         # bırakılır (tek şirketli sektörde medyan = kendisi olurdu).
+        # Aynı şirketin farklı hisse sınıfları (GOOG/GOOGL, BRK.A/B) aynı
+        # finansalları taşır; medyanı çift saymamak için yalnızca biri katılır.
+        # Tabloda ikisi de görünür ve skorlanır.
+        fin_anahtar = ["Sektör", "Net Kar (TTM)", "Toplam Varlıklar"]
+        tekil = (
+            ~df.duplicated(fin_anahtar) | df[fin_anahtar].isna().any(axis=1)
+        )
         for oran, sekt_ad, sadece_poz, _ in OZET_ORANLAR:
-            deger = oran_temiz(oran, sadece_poz)
+            deger = oran_temiz(oran, sadece_poz).where(tekil)
             df[sekt_ad] = deger.groupby(df["Sektör"]).transform(
                 lambda s: s.median() if s.count() >= 3 else float("nan")
             ).round(2)
