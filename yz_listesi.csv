@@ -1,0 +1,72 @@
+Hisse,Tema,Kademe,YZ Bağlantısı
+NVDA,YZ hızlandırıcıları,Çekirdek,YZ eğitimi ve çıkarımında lider GPU'lar ve CUDA yazılım ekosistemi
+AMD,YZ hızlandırıcıları,Çekirdek,Instinct YZ hızlandırıcıları ve EPYC veri merkezi işlemcileri
+TSM,Dökümhane,Çekirdek,İleri YZ çiplerinin neredeyse tamamını üreten dökümhane; CoWoS ileri paketleme
+INTC,Dökümhane,Çekirdek,"Xeon işlemciler, Gaudi hızlandırıcıları ve dökümhane iddiası; YZ payı küçük"
+AVGO,Özel çip / bağlantı,Çekirdek,Hiper ölçekliler için özel YZ çipleri (ör. Google TPU) ve veri merkezi Ethernet çipleri
+MRVL,Özel çip / bağlantı,Çekirdek,Özel YZ çipleri ve veri merkezi optik bağlantı DSP'leri
+ARM,Özel çip / bağlantı,Çekirdek,Veri merkezi ve mobil işlemci mimarisi lisansları (ör. NVIDIA Grace)
+ALAB,Özel çip / bağlantı,Çekirdek,YZ sunucularında GPU-CPU arası PCIe/CXL bağlantı çipleri
+CRDO,Özel çip / bağlantı,Çekirdek,Veri merkezinde yüksek hızlı bağlantı çipleri ve aktif elektrik kabloları
+MU,Bellek / depolama,Çekirdek,YZ GPU'larında kullanılan HBM belleği üreten tek ABD şirketi
+SNDK,Bellek / depolama,Çekirdek,NAND flash ve kurumsal SSD; YZ veri depolama talebi
+WDC,Bellek / depolama,Çekirdek,Veri merkezi için yüksek kapasiteli sabit diskler
+STX,Bellek / depolama,Çekirdek,Veri merkezi için yüksek kapasiteli sabit diskler
+AMAT,Yarı iletken ekipmanı,Çekirdek,Biriktirme ve aşındırma ekipmanı; ileri düğüm ve HBM üretimi
+LRCX,Yarı iletken ekipmanı,Çekirdek,Aşındırma ekipmanı; HBM ve ileri paketleme için kritik
+KLAC,Yarı iletken ekipmanı,Çekirdek,Çip üretiminde süreç kontrol ve denetim ekipmanı
+ASML,Yarı iletken ekipmanı,Çekirdek,En ileri çipler için EUV litografinin tek tedarikçisi
+TER,Yarı iletken ekipmanı,Çekirdek,YZ çipi ve HBM test ekipmanı; ayrıca işbirlikçi robotlar
+CDNS,Çip tasarım yazılımı,Çekirdek,Çip tasarım yazılımı (EDA) ve donanım emülasyonu
+SNPS,Çip tasarım yazılımı,Çekirdek,Çip tasarım yazılımı (EDA) ve tasarım IP'leri
+DELL,Sunucu,Çekirdek,GPU'lu YZ sunucuları ve kurumsal YZ altyapısı
+SMCI,Sunucu,Çekirdek,"GPU yoğun, sıvı soğutmalı YZ sunucu rafları"
+HPE,Sunucu,Çekirdek,YZ sunucuları ve süper bilgisayarlar (Cray)
+ANET,Ağ / optik,Çekirdek,YZ kümeleri için yüksek hızlı Ethernet anahtarları
+CSCO,Ağ / optik,Çekirdek,Hiper ölçeklilere YZ ağ ekipmanı; gelire payı küçük
+CIEN,Ağ / optik,Çekirdek,Veri merkezleri arası optik ağ ekipmanı
+COHR,Ağ / optik,Çekirdek,Veri merkezi optik alıcı-vericileri ve lazerler
+LITE,Ağ / optik,Çekirdek,Veri merkezi optik bileşenleri ve lazerler
+MSFT,Hiper ölçekli bulut,Çekirdek,"Azure bulutu, OpenAI ortaklığı ve Copilot ürünleri"
+AMZN,Hiper ölçekli bulut,Çekirdek,"AWS bulutu, Trainium YZ çipleri ve Anthropic ortaklığı"
+GOOGL,Hiper ölçekli bulut,Çekirdek,"Google Cloud, TPU çipleri ve Gemini modelleri"
+META,Hiper ölçekli bulut,Çekirdek,"Llama modelleri, reklam ve öneride YZ, büyük veri merkezi yatırımları"
+ORCL,Hiper ölçekli bulut,Çekirdek,OCI bulutunda büyük GPU kümeleri ve Stargate veri merkezi projeleri
+CRWV,Neocloud,Çekirdek,YZ laboratuvarlarına GPU kapasitesi kiralayan bulut
+NBIS,Neocloud,Çekirdek,GPU bulutu ve YZ altyapı hizmetleri
+IREN,Neocloud,Çekirdek,Bitcoin madenciliğinden YZ bulutu ve veri merkezine geçiş
+EQIX,Veri merkezi,Çekirdek,Küresel kolokasyon veri merkezleri; YZ çıkarım altyapısı
+DLR,Veri merkezi,Çekirdek,Hiper ölçeklilere büyük ölçekli veri merkezi kiralama
+GEV,Enerji / şebeke,Çekirdek,Gaz türbinleri ve şebeke ekipmanı; veri merkezi elektrik talebi
+ETN,Enerji / şebeke,Çekirdek,Veri merkezi güç dağıtımı ve güç yönetimi ekipmanı
+CEG,Enerji / şebeke,Çekirdek,En büyük ABD nükleer üreticisi; veri merkezleriyle uzun vadeli elektrik anlaşmaları
+VST,Enerji / şebeke,Çekirdek,Nükleer ve gaz santralleri; veri merkezi elektrik talebi
+TLN,Enerji / şebeke,Çekirdek,Nükleer santral yanındaki veri merkezine elektrik anlaşması
+PWR,Enerji / şebeke,Çekirdek,Şebeke ve veri merkezi elektrik altyapısı inşaatı
+VRT,Soğutma,Çekirdek,Veri merkezi sıvı soğutma ve güç altyapısı
+MOD,Soğutma,Çekirdek,Veri merkezi soğutma sistemleri
+NVT,Soğutma,Çekirdek,Sıvı soğutma ve elektrik muhafaza çözümleri
+PLTR,YZ yazılımı,Uygulama,Kurumsal ve kamu YZ platformu (AIP)
+NOW,YZ yazılımı,Uygulama,Kurumsal iş akışlarında YZ ajanları
+CRM,YZ yazılımı,Uygulama,Agentforce YZ ajanları; CRM verisi üzerinde YZ
+AI,YZ yazılımı,Uygulama,Kurumsal YZ uygulamaları (C3.ai)
+PATH,YZ yazılımı,Uygulama,Süreç otomasyonu ve YZ ajanları
+SOUN,YZ yazılımı,Uygulama,"Sesli YZ asistanları (otomotiv, restoran, müşteri hizmetleri)"
+APP,YZ yazılımı,Uygulama,YZ tabanlı reklam motoru (Axon)
+SNOW,Veri / analitik,Uygulama,YZ modelleri için veri bulutu
+DDOG,Veri / analitik,Uygulama,Bulut ve YZ uygulamalarının izlenmesi
+MDB,Veri / analitik,Uygulama,Vektör arama ve YZ uygulama veritabanı
+PANW,Siber güvenlik,Uygulama,YZ destekli güvenlik platformu; YZ sistemlerinin güvenliği
+CRWD,Siber güvenlik,Uygulama,YZ tabanlı uç nokta güvenliği
+NET,Siber güvenlik,Uygulama,Uç ağda YZ çıkarımı (Workers AI) ve web güvenliği
+TSLA,Robotik / otonom,Uygulama,"Otonom sürüş (FSD), robotaksi ve insansı robot Optimus"
+SYM,Robotik / otonom,Uygulama,Depo otomasyonunda YZ destekli robotik
+AUR,Robotik / otonom,Uygulama,Otonom kamyon teknolojisi
+MBLY,Robotik / otonom,Uygulama,Görüntü tabanlı sürücü destek ve otonom sürüş çipleri
+TEM,Sağlık,Uygulama,Klinik ve genomik veride YZ destekli analiz ve teşhis
+RXRX,Sağlık,Uygulama,YZ ile ilaç keşfi
+AVAV,Savunma,Uygulama,Otonom insansız hava araçları
+KTOS,Savunma,Uygulama,Otonom savaş dronları ve savunma sistemleri
+ACN,BT hizmetleri,Uygulama,Şirketlerin YZ dönüşümü için danışmanlık ve uygulama
+IBM,BT hizmetleri,Uygulama,watsonx YZ platformu ve YZ danışmanlığı
+QCOM,Uç (edge) YZ,Uygulama,Telefon ve bilgisayarlarda cihaz üstü YZ işlemcileri
