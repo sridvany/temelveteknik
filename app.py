@@ -197,7 +197,9 @@ OZET_ORANLAR = [
     ("PEG", "PEG (Sekt.)", True, "dusuk"),
     ("FD/Gelir", "FD/Gelir (Sekt.)", True, "dusuk"),
     ("ROA %", "ROA (Sekt.)", False, "yuksek"),
-    ("Tem. Verimi %", "Tem. (Sekt.)", False, "yuksek"),
+    # sadece_pozitif=True: temettü vermeyenler API'den 0 döner; 0'lar
+    # medyana ve skora girerse sektör medyanı 0 olur, herkes bedava puan alır.
+    ("Tem. Verimi %", "Tem. (Sekt.)", True, "yuksek"),
     ("Net Borç/FAVÖK", "NB/FAVÖK (Sekt.)", False, "dusuk"),
     ("FCF Verimi %", "FCF Ver. (Sekt.)", False, "yuksek"),
 ]
@@ -231,7 +233,8 @@ TUM_KOLONLAR = (
 
 @st.cache_data(ttl=3600)
 def veri_cek_v5(market: str, country: str, sadece_yerli: bool,
-                otc_haric: bool, min_pd: float, kolonlar: tuple):
+                otc_haric: bool, min_pd: float, max_pd: float,
+                kolonlar: tuple):
     url = f"https://scanner.tradingview.com/{market}/scan"
     headers = {
         "authority": "scanner.tradingview.com",
@@ -262,6 +265,10 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool,
     if min_pd > 0:
         filtreler.append(
             {"left": "market_cap_basic", "operation": "egreater", "right": min_pd}
+        )
+    if max_pd > 0:
+        filtreler.append(
+            {"left": "market_cap_basic", "operation": "eless", "right": max_pd}
         )
 
     all_rows = []
@@ -348,15 +355,26 @@ if market == "america":
         "OTC hisselerini hariç tut (mikro-cap / kabuk şirket gürültüsü)",
         value=True,
     )
-min_pd_milyon = st.number_input(
-    "Min. piyasa değeri (yerel para birimi, milyon) — 0 = filtre yok",
-    min_value=0.0, value=0.0, step=50.0,
-)
+pd_sol, pd_sag = st.columns(2)
+with pd_sol:
+    min_pd_milyon = st.number_input(
+        "Min. piyasa değeri (yerel para birimi, milyon) — 0 = filtre yok",
+        min_value=0.0, value=0.0, step=50.0,
+    )
+with pd_sag:
+    max_pd_milyon = st.number_input(
+        "Maks. piyasa değeri (yerel para birimi, milyon) — 0 = filtre yok",
+        min_value=0.0, value=0.0, step=50.0,
+    )
+pd_aralik_hatali = 0 < max_pd_milyon < min_pd_milyon
+if pd_aralik_hatali:
+    st.warning("Maks. piyasa değeri, min. piyasa değerinden küçük olamaz.")
 
-if st.button("Piyasayı Tara ve Verileri Getir"):
+if st.button("Piyasayı Tara ve Verileri Getir", disabled=pd_aralik_hatali):
     st.session_state["tarama"] = veri_cek_v5(
         market, country, sadece_yerli, otc_haric,
-        float(min_pd_milyon) * 1e6, tuple(TUM_KOLONLAR)
+        float(min_pd_milyon) * 1e6, float(max_pd_milyon) * 1e6,
+        tuple(TUM_KOLONLAR)
     )
 
 if "tarama" in st.session_state:
