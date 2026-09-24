@@ -6,6 +6,7 @@ import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 st.set_page_config(page_title="Ücretsiz Temel ve Teknik Analiz", page_icon="📊", layout="wide")
 
@@ -235,7 +236,7 @@ TUM_KOLONLAR = (
 @st.cache_data(ttl=3600)
 def veri_cek_v5(market: str, country: str, sadece_yerli: bool,
                 otc_haric: bool, min_pd: float, max_pd: float,
-                kolonlar: tuple):
+                kolonlar: tuple, isimler: tuple = ()):
     url = f"https://scanner.tradingview.com/{market}/scan"
     headers = {
         "authority": "scanner.tradingview.com",
@@ -271,6 +272,15 @@ def veri_cek_v5(market: str, country: str, sadece_yerli: bool,
         filtreler.append(
             {"left": "market_cap_basic", "operation": "eless", "right": max_pd}
         )
+    if isimler:
+        # YZ listesi modu: yalnız adı verilen hisseler; ülke ve piyasa değeri
+        # filtresi uygulanmaz. ADR'ler (TSM, ASML, ARM) "dr" tipinde gelir.
+        filtreler = [
+            {"left": "type", "operation": "in_range", "right": ["stock", "dr"]},
+            {"left": "typespecs", "operation": "has_none_of", "right": ["preferred"]},
+            {"left": "name", "operation": "in_range", "right": list(isimler)},
+            {"left": "exchange", "operation": "nequal", "right": "OTC"},
+        ]
 
     all_rows = []
     gorulen = set()
@@ -371,12 +381,76 @@ pd_aralik_hatali = 0 < max_pd_milyon < min_pd_milyon
 if pd_aralik_hatali:
     st.warning("Maks. piyasa değeri, min. piyasa değerinden küçük olamaz.")
 
-if st.button("Piyasayı Tara ve Verileri Getir", disabled=pd_aralik_hatali):
+# YZ teması hisse listesi: repoda app.py'nin yanındaki CSV. Liste zamanla
+# değişir; hisse eklemek/çıkarmak/tema değiştirmek için yalnız CSV düzenlenir.
+YZ_LISTESI_YOLU = Path(__file__).with_name("yz_listesi.csv")
+YZ_KOLONLARI = ["Hisse", "Tema", "Kademe", "YZ Bağlantısı"]
+
+
+def yz_listesi_oku():
+    """(liste, hata) döndürür; dosya yok ya da bozuksa liste None olur."""
+    if not YZ_LISTESI_YOLU.exists():
+        return None, f"{YZ_LISTESI_YOLU.name} bulunamadı (app.py ile aynı klasörde olmalı)."
+    try:
+        yz = pd.read_csv(YZ_LISTESI_YOLU, dtype=str, encoding="utf-8-sig").fillna("")
+    except Exception as e:
+        return None, f"{YZ_LISTESI_YOLU.name} okunamadı: {e}"
+    eksik = [k for k in YZ_KOLONLARI if k not in yz.columns]
+    if eksik:
+        return None, f"{YZ_LISTESI_YOLU.name} içinde eksik kolon: {', '.join(eksik)}"
+    yz = yz[YZ_KOLONLARI].apply(lambda s: s.str.strip())
+    yz["Hisse"] = yz["Hisse"].str.upper()
+    yz = yz[yz["Hisse"] != ""].drop_duplicates("Hisse").reset_index(drop=True)
+    return yz, None
+
+
+tara_kolon, yz_kolon = st.columns(2)
+with tara_kolon:
+    tara = st.button("Piyasayı Tara ve Verileri Getir", disabled=pd_aralik_hatali)
+yz_tara = False
+if market == "america":
+    yz_listesi, yz_hata = yz_listesi_oku()
+    with yz_kolon:
+        yz_tara = st.button(
+            "🤖 YZ Listesi Oluştur",
+            disabled=pd_aralik_hatali or yz_listesi is None,
+            help="yz_listesi.csv'deki şirketleri değerlendirir. Sektör "
+                 "medyanları yukarıdaki filtrelerle taranan tüm piyasadan "
+                 "hesaplanır; listedeki yurt dışı merkezli şirketler de çekilir.",
+        )
+        if yz_hata:
+            st.caption(f"⚠️ {yz_hata}")
+
+if tara:
     st.session_state["tarama"] = veri_cek_v5(
         market, country, sadece_yerli, otc_haric,
         float(min_pd_milyon) * 1e6, float(max_pd_milyon) * 1e6,
         tuple(TUM_KOLONLAR)
     )
+    st.session_state["tarama_yz"] = None
+
+if yz_tara:
+    # 1) Medyanlar için piyasa taraması (kullanıcının filtreleriyle)
+    df_tum, hata_tum = veri_cek_v5(
+        market, country, sadece_yerli, otc_haric,
+        float(min_pd_milyon) * 1e6, float(max_pd_milyon) * 1e6,
+        tuple(TUM_KOLONLAR)
+    )
+    # 2) Filtrelere takılan YZ hisseleri (yurt dışı merkezli, PD aralığı dışı)
+    df_ek, hata_ek = veri_cek_v5(
+        market, country, False, True, 0.0, 0.0,
+        tuple(TUM_KOLONLAR), tuple(yz_listesi["Hisse"])
+    )
+    df_ek = df_ek[~df_ek["Hisse"].isin(df_tum["Hisse"])].drop_duplicates("Hisse")
+    # Ek çekilen şirketler skorlanır ama sektör medyanına katılmaz.
+    st.session_state["tarama"] = (
+        pd.concat(
+            [df_tum.assign(_medyan_dahil=True), df_ek.assign(_medyan_dahil=False)],
+            ignore_index=True,
+        ),
+        hata_tum or hata_ek,
+    )
+    st.session_state["tarama_yz"] = yz_listesi
 
 # Sol panel: yazılan hissenin yıldız ve Sektör Skoru dökümü. Kutu burada
 # oluşturulur, içerik tarama hesapları bittikten sonra aşağıda doldurulur.
@@ -392,12 +466,28 @@ with yildiz_panel:
 
 if "tarama" in st.session_state:
     df, hata = st.session_state["tarama"]
+    # Oturumdaki ham veriyi değiştirmemek için kopya: aksi halde her yeniden
+    # çalışmada (ör. panelde ticker yazınca) tarih dönüşümü tekrar uygulanıp
+    # ⏰ rozetli "Sonraki Bilanço" tarihleri boşalıyordu.
+    df = df.copy()
+    yz_listesi_aktif = st.session_state.get("tarama_yz")
+    if "_medyan_dahil" not in df.columns:
+        df["_medyan_dahil"] = True
+    df["_medyan_dahil"] = df["_medyan_dahil"].fillna(True).astype(bool)
     if df.empty:
         st.error("Veri çekilemedi.")
         if hata:
             st.code(hata)
     else:
-        st.success(f"{secim}: {len(df)} şirket çekildi.")
+        if yz_listesi_aktif is None:
+            st.success(f"{secim}: {len(df)} şirket çekildi.")
+        else:
+            st.success(
+                f"{secim}: sektör medyanları için {int(df['_medyan_dahil'].sum())} "
+                f"şirket tarandı; aşağıda yalnız YZ listesi gösteriliyor."
+            )
+        if hata:
+            st.warning(f"Taramada hata: {hata}")
 
         # Bilanço tarihleri: unix timestamp -> tarih. 7 gün içinde bilanço
         # açıklayacaklara ⏰ rozeti (oranlar yakında değişecek uyarısı).
@@ -414,10 +504,13 @@ if "tarama" in st.session_state:
             "⏰ " + df.loc[yakin, "Sonraki Bilanço"]
         )
 
-        yakin_sayi = int(yakin.sum())
+        yakin_mesaj = yakin
+        if yz_listesi_aktif is not None:
+            yakin_mesaj = yakin & df["Hisse"].isin(yz_listesi_aktif["Hisse"])
+        yakin_sayi = int(yakin_mesaj.sum())
         if yakin_sayi:
             yakin_hisseler = ", ".join(
-                df.loc[yakin, "Hisse"].astype(str).sort_values()
+                df.loc[yakin_mesaj, "Hisse"].astype(str).sort_values()
             )
             st.info(
                 f"⏰ Önümüzdeki 7 günde bilanço açıklayacak "
@@ -464,6 +557,8 @@ if "tarama" in st.session_state:
         tekil = (
             ~df.duplicated(fin_anahtar) | df[fin_anahtar].isna().any(axis=1)
         )
+        # YZ modunda filtre dışından ek çekilen şirketler medyana girmez.
+        tekil = tekil & df["_medyan_dahil"]
         for oran, sekt_ad, sadece_poz, _ in OZET_ORANLAR:
             deger = oran_temiz(oran, sadece_poz).where(tekil)
             df[sekt_ad] = deger.groupby(df["Sektör"]).transform(
@@ -799,10 +894,65 @@ if "tarama" in st.session_state:
                             "skora katılmaz."
                         )
 
+        # --- YZ modu: tüm hesaplar tüm piyasayla yapıldı, şimdi listeye daralt ---
+        ozet_adlari = list(OZET_ADLARI)
+        tema_ozet = None
+        if yz_listesi_aktif is not None:
+            yz = yz_listesi_aktif.set_index("Hisse")
+            bulunamayan = [h for h in yz.index if h not in set(df["Hisse"])]
+            df = df[df["Hisse"].isin(yz.index)].copy()
+            for k in ("Tema", "Kademe", "YZ Bağlantısı"):
+                df[k] = df["Hisse"].map(yz[k])
+            # Sıra: kademe ve tema CSV'deki sırayla, tema içinde piyasa değeri
+            sira = lambda s: {v: n for n, v in enumerate(dict.fromkeys(s))}
+            df["_k"] = df["Kademe"].map(sira(yz["Kademe"]))
+            df["_t"] = df["Tema"].map(sira(yz["Tema"]))
+            df = df.sort_values(
+                ["_k", "_t", "Piyasa Değeri"], ascending=[True, True, False]
+            ).drop(columns=["_k", "_t"])
+            ozet_adlari = (
+                ozet_adlari[:2] + ["Tema", "Kademe", "YZ Bağlantısı"]
+                + ozet_adlari[2:]
+            )
+
+            st.divider()
+            st.subheader(f"🤖 YZ Listesi — {len(df)} şirket")
+            if bulunamayan:
+                st.warning(
+                    "Listede olup bulunamayan: " + ", ".join(bulunamayan)
+                    + " — ticker değişmiş ya da borsadan çıkmış olabilir; "
+                      "yz_listesi.csv'yi kontrol edin."
+                )
+            fk_t = oran_temiz("F/K (FKO)", True)
+            fd_t = oran_temiz("FD/FAVÖK", True)
+            tema_ozet = (
+                df.assign(_fk=fk_t, _fd=fd_t,
+                          _skor=df["Sektör Skoru"].astype(float))
+                .groupby(["Kademe", "Tema"], sort=False)
+                .agg(**{
+                    "Şirket": ("Hisse", "count"),
+                    "Ort. Yıldız": ("_yildiz_sayi", "mean"),
+                    "Medyan Sektör Skoru": ("_skor", "median"),
+                    "Medyan F/K": ("_fk", "median"),
+                    "Medyan FD/FAVÖK": ("_fd", "median"),
+                    "Toplam PD (milyar $)": (
+                        "Piyasa Değeri", lambda s: s.sum() / 1e9
+                    ),
+                    "Hisseler": ("Hisse", ", ".join),
+                })
+                .round(2).reset_index()
+            )
+            st.markdown("**Tema Özeti**")
+            st.caption(
+                "Ort. Yıldız ve Sektör Skoru tüm piyasa medyanlarına göre; "
+                "F/K ve FD/FAVÖK medyanlarına aykırı ve negatif değerler katılmaz."
+            )
+            st.dataframe(tema_ozet, use_container_width=True, hide_index=True)
+
         # Yıldız kolonu Özet dışındaki sekmelerde de görünsün (Şirket'ten sonra)
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
         ortak_adlar = ortak_adlar[:2] + ["Yıldız"] + ortak_adlar[2:]
-        df_ozet = df[OZET_ADLARI]
+        df_ozet = df[ozet_adlari]
         df_gelir = df[ortak_adlar + [k[1] for k in GELIR_KOLONLARI]]
         df_bilanco = df[ortak_adlar + [k[1] for k in BILANCO_KOLONLARI]]
         df_nakit = df[ortak_adlar + [k[1] for k in NAKIT_KOLONLARI]]
@@ -825,10 +975,13 @@ if "tarama" in st.session_state:
             df_gelir.to_excel(writer, index=False, sheet_name="Gelir Tablosu")
             df_bilanco.to_excel(writer, index=False, sheet_name="Bilanço")
             df_nakit.to_excel(writer, index=False, sheet_name="Nakit Akışı")
+            if tema_ozet is not None:
+                tema_ozet.to_excel(writer, index=False, sheet_name="Tema Özeti")
+        dosya_on_ek = f"{market}_YZ" if yz_listesi_aktif is not None else market
         st.download_button(
             label="📥 Excel Dosyasını İndir",
             data=buffer.getvalue(),
-            file_name=f"{market}_Finansallar.xlsx",
+            file_name=f"{dosya_on_ek}_Finansallar.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
@@ -861,7 +1014,7 @@ if "tarama" in st.session_state:
             }
             temiz_ortak = [a for a in ortak_adlar if a not in GIZLI]
             temiz_sayfalar = {
-                "Özet": temiz[[a for a in OZET_ADLARI if a not in GIZLI]],
+                "Özet": temiz[[a for a in ozet_adlari if a not in GIZLI]],
                 "Gelir Tablosu": temiz[
                     temiz_ortak + [k[1] for k in GELIR_KOLONLARI]
                 ],
@@ -885,14 +1038,14 @@ if "tarama" in st.session_state:
             st.download_button(
                 label="📥 Temiz Listeyi İndir",
                 data=buf2.getvalue(),
-                file_name=f"{market}_Temiz_Liste.xlsx",
+                file_name=f"{dosya_on_ek}_Temiz_Liste.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="temiz_indir",
             )
 
         with st.expander("📘 Temiz Liste ne anlatıyor?"):
             bayrak_sayilari = {
-                ad: int(t.fillna(False).sum()) for ad, t in BAYRAKLAR
+                ad: int(t.loc[df.index].fillna(False).sum()) for ad, t in BAYRAKLAR
             }
             st.markdown(f"""
 #### Listedeki şirketlerin özellikleri
