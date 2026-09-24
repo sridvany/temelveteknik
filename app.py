@@ -125,6 +125,7 @@ ORTAK_KOLONLAR = [
     ("exchange", "Borsa"),
     ("currency", "Para Birimi"),
     ("sector", "Sektör"),
+    ("industry", "Endüstri"),
     ("market_cap_basic", "Piyasa Değeri"),
     ("close", "Son Fiyat"),
     ("Perf.W", "7G Değişim %"),
@@ -503,27 +504,47 @@ if "tarama" in st.session_state:
         kriter["buyume"] = df["EPS Büyüme YY % (TTM)"] > 0
         fk_poz = oran_temiz("F/K (FKO)", True)
         fd_poz = oran_temiz("FD/FAVÖK", True)
-        kriter["deger"] = (
+        pd_poz = oran_temiz("PD/DD", True)
+        # Finans sektöründe FAVÖK çoğunlukla yok: değerleme F/K + PD/DD ile
+        # yapılır. Borç muafiyeti ise yalnız bankalar ve aracı kurumlar için
+        # (fonlama modeli gereği borç = ham madde). REIT, sigorta, varlık
+        # yönetimi vb. Finans şirketlerinde borç anlamlı, kriter geçerli kalır.
+        finans = df["Sektör"].astype(str).str.contains("Finans", na=False)
+        banka = df["Endüstri"].astype(str).str.contains("Bank", na=False)
+        deger_genel = (
             (fk_poz <= df["F/K (Sekt.)"]) & (fd_poz <= df["FD/FAVÖK (Sekt.)"])
+        )
+        deger_finans = (
+            (fk_poz <= df["F/K (Sekt.)"]) & (pd_poz <= df["PD/DD (Sekt.)"])
+        )
+        kriter["deger"] = deger_finans.where(finans, deger_genel)
+        gecerli_deger_genel = (
+            fk_poz.notna() & fd_poz.notna()
+            & df["F/K (Sekt.)"].notna() & df["FD/FAVÖK (Sekt.)"].notna()
+        )
+        gecerli_deger_finans = (
+            fk_poz.notna() & pd_poz.notna()
+            & df["F/K (Sekt.)"].notna() & df["PD/DD (Sekt.)"].notna()
         )
         gecerli = pd.DataFrame({
             "roe": df["ROE %"].notna(),
             "roic": df["ROIC %"].notna(),
             "nakit": cfo_nk.notna(),
             "fcf": fcf_ver.notna(),
-            "borc": df["Borç / Özkaynak"].notna(),
+            "borc": df["Borç / Özkaynak"].notna() & ~banka,
             "buyume": df["EPS Büyüme YY % (TTM)"].notna(),
-            "deger": (
-                fk_poz.notna() & fd_poz.notna()
-                & df["F/K (Sekt.)"].notna() & df["FD/FAVÖK (Sekt.)"].notna()
-            ),
+            "deger": gecerli_deger_finans.where(finans, gecerli_deger_genel),
         })
         puan = (kriter & gecerli).sum(axis=1)
         gecerli_sayisi = gecerli.sum(axis=1)
         yildiz_sayi = puan.where(gecerli_sayisi >= 4)
-        df["Yıldız"] = yildiz_sayi.map(
-            lambda s: "—" if pd.isna(s) else "⭐" * int(s) + "☆" * (7 - int(s))
-        )
+        # ⭐ geçti · ☆ kaldı · ⚪ veri yok / hesap dışı. Eksik kriter artık
+        # başarısız kriterle aynı görünmüyor ("5/5 geçerli" ≠ "5/7").
+        df["Yıldız"] = [
+            "—" if pd.isna(s)
+            else "⭐" * int(s) + "☆" * int(g - s) + "⚪" * int(7 - g)
+            for s, g in zip(yildiz_sayi, gecerli_sayisi)
+        ]
 
         # --- Bayraklar: yıldızı düşürmez, yıldızın güvenilirliğini sorgular ---
         # Yıldız kriterlerinin girdileri (ROE, F/K, FCF, EPS büyümesi) bazı
@@ -589,6 +610,8 @@ if "tarama" in st.session_state:
                         f"{r['Yıldız']} · Sektör Skoru: "
                         f"{'—' if pd.isna(skor) else skor}  \n"
                         f"Sektör: {r['Sektör']}"
+                        + ("" if pd.isna(r["Endüstri"]) or not r["Endüstri"]
+                           else f" · {r['Endüstri']}")
                     )
 
                     # Değerleme kriterinin iki ayağını ayrı işaretle
@@ -599,11 +622,16 @@ if "tarama" in st.session_state:
                             return f"{etiket} {_f(ham, 1)} ≤ sektör {_f(m, 1)} ✓"
                         return f"{etiket} {_f(ham, 1)} > sektör {_f(m, 1)} ✗"
 
+                    fin_i = bool(finans[i])
+                    if fin_i:
+                        ikinci_ayak = _ayak("PD/DD", r["PD/DD"], pd_poz[i],
+                                            r["PD/DD (Sekt.)"])
+                    else:
+                        ikinci_ayak = _ayak("FD/FAVÖK", r["FD/FAVÖK"], fd_poz[i],
+                                            r["FD/FAVÖK (Sekt.)"])
                     deger_aciklama = (
                         _ayak("F/K", r["F/K (FKO)"], fk_poz[i], r["F/K (Sekt.)"])
-                        + " ve "
-                        + _ayak("FD/FAVÖK", r["FD/FAVÖK"], fd_poz[i],
-                                r["FD/FAVÖK (Sekt.)"])
+                        + " ve " + ikinci_ayak
                     )
                     kriter_satirlari = [
                         ("roe", "Kârlılık",
@@ -624,7 +652,10 @@ if "tarama" in st.session_state:
                     satirlar = []
                     for anahtar, baslik, aciklama in kriter_satirlari:
                         if not gecerli.loc[i, anahtar]:
-                            isaret, ek = "⚪", " — veri yok / hesap dışı"
+                            isaret = "⚪"
+                            ek = (" — bankalarda hesap dışı"
+                                  if anahtar == "borc" and bool(banka[i])
+                                  else " — veri yok / hesap dışı")
                         elif kriter.loc[i, anahtar]:
                             isaret, ek = "✅", ""
                         else:
@@ -633,6 +664,95 @@ if "tarama" in st.session_state:
                             f"{isaret} **{baslik}:** {aciklama}{ek}"
                         )
                     st.markdown("  \n".join(satirlar))
+
+                    # --- Kaybedilen her yıldız için gereken değişim ---
+                    def _y(x):
+                        return f"%{x * 100:,.1f}"
+
+                    def _kaldi(k):
+                        return bool(gecerli.loc[i, k]) and not bool(kriter.loc[i, k])
+
+                    gereken = []
+                    if _kaldi("roe"):
+                        v = r["ROE %"]
+                        gereken.append(
+                            f"**Kârlılık:** ROE'nin %{_f(v, 1)} → %15'e çıkması "
+                            f"(+{_f(15 - v, 1)} puan)"
+                        )
+                    if _kaldi("roic"):
+                        v = r["ROIC %"]
+                        gereken.append(
+                            f"**Sermaye verimi:** ROIC'in %{_f(v, 1)} → %10'a "
+                            f"çıkması (+{_f(10 - v, 1)} puan)"
+                        )
+                    if _kaldi("nakit"):
+                        v = cfo_nk[i]
+                        if v > 0:
+                            gereken.append(
+                                f"**Nakit dönüşümü:** Faaliyet nakit akışının "
+                                f"{_y(1 / v - 1)} artması (net kâr sabitken)"
+                            )
+                        else:
+                            gereken.append(
+                                "**Nakit dönüşümü:** Faaliyet nakit akışının "
+                                "pozitife dönüp net kârı karşılaması"
+                            )
+                    if _kaldi("fcf"):
+                        gereken.append(
+                            f"**Serbest nakit:** FCF'nin pozitife dönmesi "
+                            f"(şu an verim %{_f(fcf_ver[i])})"
+                        )
+                    if _kaldi("borc"):
+                        v = r["Borç / Özkaynak"]
+                        gereken.append(
+                            f"**Borç:** Borcun {_y(1 - 1 / v)} azalması ya da "
+                            f"özkaynağın {_y(v - 1)} artması"
+                        )
+                    if _kaldi("buyume"):
+                        gereken.append(
+                            f"**Büyüme:** EPS büyümesinin pozitife dönmesi "
+                            f"(şu an %{_f(r['EPS Büyüme YY % (TTM)'], 1)})"
+                        )
+                    if _kaldi("deger"):
+                        v, m = fk_poz[i], r["F/K (Sekt.)"]
+                        if v > m:
+                            gereken.append(
+                                f"**Değerleme (F/K):** Fiyatın {_y(1 - m / v)} "
+                                f"düşmesi ya da kârın {_y(v / m - 1)} artması"
+                            )
+                        if fin_i:
+                            v, m = pd_poz[i], r["PD/DD (Sekt.)"]
+                            if v > m:
+                                gereken.append(
+                                    f"**Değerleme (PD/DD):** Fiyatın "
+                                    f"{_y(1 - m / v)} düşmesi ya da özkaynağın "
+                                    f"{_y(v / m - 1)} artması"
+                                )
+                        else:
+                            v, m = fd_poz[i], r["FD/FAVÖK (Sekt.)"]
+                            if v > m:
+                                favok, pdeg = r["FAVÖK (TTM)"], r["Piyasa Değeri"]
+                                metin = (f"**Değerleme (FD/FAVÖK):** FAVÖK'ün "
+                                         f"{_y(v / m - 1)} artması")
+                                # FD farkı (v - m) × FAVÖK kadar azalmalı;
+                                # bu tutar piyasa değerinden düşer.
+                                if pd.notna(favok) and pd.notna(pdeg) and pdeg > 0:
+                                    dusus = (v - m) * favok / pdeg
+                                    if dusus < 1:
+                                        metin += f" ya da fiyatın {_y(dusus)} düşmesi"
+                                    else:
+                                        metin += (" (net borç yüksek; yalnız "
+                                                  "fiyat düşüşüyle ulaşılamaz)")
+                                gereken.append(metin)
+                    if gereken:
+                        st.markdown(
+                            "**Kaybedilen yıldızlar için gereken:**  \n"
+                            + "  \n".join(f"↳ {g}" for g in gereken)
+                        )
+                        st.caption(
+                            "Diğer her şey sabitken; sektör medyanları da "
+                            "zamanla değişir."
+                        )
                     if gecerli_sayisi[i] < 4:
                         st.caption(
                             "Geçerli kriter sayısı 4'ten az olduğu için "
@@ -788,9 +908,10 @@ aşağıdaki yedi kriterden en az {min_yildiz} tanesini sağlıyor:
    verimliliğinden geliyor
 3. **CFO/Net Kâr ≥ 1** — kâğıt üzerindeki kâr nakde dönüşüyor
 4. **FCF Verimi > 0** — yatırım harcamalarından sonra da nakit üretiyor
-5. **Borç/Özkaynak ≤ 1** — bilanço sağlam
+5. **Borç/Özkaynak ≤ 1** — bilanço sağlam (bankalarda hesap dışı)
 6. **EPS büyümesi (YY) > 0** — hisse başına kâr erimiyor
 7. **F/K ve FD/FAVÖK sektör medyanının altında** — emsallerine göre ucuz
+   (Finans'ta F/K ve PD/DD)
 
 Bunlara **ek olarak** dört bayrağın hiçbirini almıyor, yani:
 
@@ -914,14 +1035,22 @@ Her sağlanan kriter 1 yıldız:
 2. ROIC ≥ %10 (kaldıraçsız kalite)
 3. CFO/Net Kâr ≥ 1 (kâr nakde dönüşüyor)
 4. FCF Verimi > 0 (yatırımlar sonrası da nakit üretiyor)
-5. Borç/Özkaynak ≤ 1 (bilanço sağlığı)
+5. Borç/Özkaynak ≤ 1 (bilanço sağlığı — bankalarda hesap dışı)
 6. EPS büyümesi (YY) > 0 (kâr erimiyor — değer tuzağı freni)
-7. F/K **ve** FD/FAVÖK kendi sektör medyanının altında (göreli ucuzluk)
+7. F/K **ve** FD/FAVÖK kendi sektör medyanının altında (göreli ucuzluk —
+   Finans'ta F/K **ve** PD/DD)
 
-Verisi eksik kriter değerlendirme dışı bırakılır ve o yıldız
-kazanılamaz (ör. bankalarda FD/FAVÖK yoktur — en fazla 6 yıldız
-alabilirler). En az 4 geçerli kriteri olmayan şirkete yıldız
-verilmez ("—"). ⭐⭐⭐⭐⭐⭐⭐ "al" demek değildir; kalite + nakit +
+Gösterim: ⭐ kriteri geçti · ☆ kriteri geçemedi · ⚪ veri yok ya da
+kriter bu sektöre uymuyor. Örneğin ⭐⭐⭐⭐⭐⚪⚪ "hesaplanabilen 5
+kriterin 5'ini geçti" demektir; ⭐⭐⭐⭐⭐☆☆ ise "7 kriterin 5'ini geçti".
+Bankalarda ve aracı kurumlarda (endüstri adında "Bank" geçenler) borç
+ham madde olduğu için borç kriteri hesap dışıdır (en fazla 6 yıldız);
+REIT, sigorta ve diğer Finans şirketlerinde borç kriteri geçerlidir.
+Finans sektöründe FAVÖK çoğunlukla olmadığı için değerleme PD/DD ile
+yapılır. En az 4 geçerli kriteri olmayan şirkete
+yıldız verilmez ("—"). Sol paneldeki **⭐ Yıldız Analizi** her hissenin
+kriter dökümünü ve kaybedilen yıldızlar için gereken değişimi gösterir.
+⭐⭐⭐⭐⭐⭐⭐ "al" demek değildir; kalite + nakit +
 büyüme + ucuzluk kombinasyonunun mekanik bir özetidir. Yatırım
 tavsiyesi değildir. Not: FCF kriteri sermaye-yoğun sektörlerde
 (havayolu, enerji, telekom) yatırım fazındaki sağlıklı şirketlere
