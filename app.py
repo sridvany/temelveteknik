@@ -505,19 +505,19 @@ if "tarama" in st.session_state:
         fk_poz = oran_temiz("F/K (FKO)", True)
         fd_poz = oran_temiz("FD/FAVÖK", True)
         pd_poz = oran_temiz("PD/DD", True)
-        # Finans sektöründe FAVÖK çoğunlukla yok: değerleme F/K + PD/DD ile
-        # yapılır. Borç muafiyeti ise yalnız bankalar ve aracı kurumlar için
-        # (fonlama modeli gereği borç = ham madde). REIT, sigorta, varlık
-        # yönetimi vb. Finans şirketlerinde borç anlamlı, kriter geçerli kalır.
+        # Değerleme ikinci ayağı FD/FAVÖK. Finans sektöründe FAVÖK çoğunlukla
+        # yok; FD/FAVÖK hesaplanamayan Finans şirketinde PD/DD kullanılır.
+        # (FD/FAVÖK'ü olan Finans şirketleri eski hesapta kalır.)
         finans = df["Sektör"].astype(str).str.contains("Finans", na=False)
-        banka = df["Endüstri"].astype(str).str.contains("Bank", na=False)
+        fd_var = fd_poz.notna() & df["FD/FAVÖK (Sekt.)"].notna()
+        pd_kullan = finans & ~fd_var
         deger_genel = (
             (fk_poz <= df["F/K (Sekt.)"]) & (fd_poz <= df["FD/FAVÖK (Sekt.)"])
         )
         deger_finans = (
             (fk_poz <= df["F/K (Sekt.)"]) & (pd_poz <= df["PD/DD (Sekt.)"])
         )
-        kriter["deger"] = deger_finans.where(finans, deger_genel)
+        kriter["deger"] = deger_finans.where(pd_kullan, deger_genel)
         gecerli_deger_genel = (
             fk_poz.notna() & fd_poz.notna()
             & df["F/K (Sekt.)"].notna() & df["FD/FAVÖK (Sekt.)"].notna()
@@ -531,9 +531,9 @@ if "tarama" in st.session_state:
             "roic": df["ROIC %"].notna(),
             "nakit": cfo_nk.notna(),
             "fcf": fcf_ver.notna(),
-            "borc": df["Borç / Özkaynak"].notna() & ~banka,
+            "borc": df["Borç / Özkaynak"].notna(),
             "buyume": df["EPS Büyüme YY % (TTM)"].notna(),
-            "deger": gecerli_deger_finans.where(finans, gecerli_deger_genel),
+            "deger": gecerli_deger_finans.where(pd_kullan, gecerli_deger_genel),
         })
         puan = (kriter & gecerli).sum(axis=1)
         gecerli_sayisi = gecerli.sum(axis=1)
@@ -622,7 +622,7 @@ if "tarama" in st.session_state:
                             return f"{etiket} {_f(ham, 1)} ≤ sektör {_f(m, 1)} ✓"
                         return f"{etiket} {_f(ham, 1)} > sektör {_f(m, 1)} ✗"
 
-                    fin_i = bool(finans[i])
+                    fin_i = bool(pd_kullan[i])
                     if fin_i:
                         ikinci_ayak = _ayak("PD/DD", r["PD/DD"], pd_poz[i],
                                             r["PD/DD (Sekt.)"])
@@ -652,10 +652,7 @@ if "tarama" in st.session_state:
                     satirlar = []
                     for anahtar, baslik, aciklama in kriter_satirlari:
                         if not gecerli.loc[i, anahtar]:
-                            isaret = "⚪"
-                            ek = (" — bankalarda hesap dışı"
-                                  if anahtar == "borc" and bool(banka[i])
-                                  else " — veri yok / hesap dışı")
+                            isaret, ek = "⚪", " — veri yok / hesap dışı"
                         elif kriter.loc[i, anahtar]:
                             isaret, ek = "✅", ""
                         else:
@@ -908,10 +905,10 @@ aşağıdaki yedi kriterden en az {min_yildiz} tanesini sağlıyor:
    verimliliğinden geliyor
 3. **CFO/Net Kâr ≥ 1** — kâğıt üzerindeki kâr nakde dönüşüyor
 4. **FCF Verimi > 0** — yatırım harcamalarından sonra da nakit üretiyor
-5. **Borç/Özkaynak ≤ 1** — bilanço sağlam (bankalarda hesap dışı)
+5. **Borç/Özkaynak ≤ 1** — bilanço sağlam
 6. **EPS büyümesi (YY) > 0** — hisse başına kâr erimiyor
 7. **F/K ve FD/FAVÖK sektör medyanının altında** — emsallerine göre ucuz
-   (Finans'ta F/K ve PD/DD)
+   (FD/FAVÖK'ü olmayan Finans şirketlerinde F/K ve PD/DD)
 
 Bunlara **ek olarak** dört bayrağın hiçbirini almıyor, yani:
 
@@ -1035,19 +1032,17 @@ Her sağlanan kriter 1 yıldız:
 2. ROIC ≥ %10 (kaldıraçsız kalite)
 3. CFO/Net Kâr ≥ 1 (kâr nakde dönüşüyor)
 4. FCF Verimi > 0 (yatırımlar sonrası da nakit üretiyor)
-5. Borç/Özkaynak ≤ 1 (bilanço sağlığı — bankalarda hesap dışı)
+5. Borç/Özkaynak ≤ 1 (bilanço sağlığı)
 6. EPS büyümesi (YY) > 0 (kâr erimiyor — değer tuzağı freni)
 7. F/K **ve** FD/FAVÖK kendi sektör medyanının altında (göreli ucuzluk —
-   Finans'ta F/K **ve** PD/DD)
+   FD/FAVÖK'ü olmayan Finans şirketlerinde F/K **ve** PD/DD)
 
 Gösterim: ⭐ kriteri geçti · ☆ kriteri geçemedi · ⚪ veri yok ya da
-kriter bu sektöre uymuyor. Örneğin ⭐⭐⭐⭐⭐⚪⚪ "hesaplanabilen 5
+kriter hesaplanamıyor. Örneğin ⭐⭐⭐⭐⭐⚪⚪ "hesaplanabilen 5
 kriterin 5'ini geçti" demektir; ⭐⭐⭐⭐⭐☆☆ ise "7 kriterin 5'ini geçti".
-Bankalarda ve aracı kurumlarda (endüstri adında "Bank" geçenler) borç
-ham madde olduğu için borç kriteri hesap dışıdır (en fazla 6 yıldız);
-REIT, sigorta ve diğer Finans şirketlerinde borç kriteri geçerlidir.
-Finans sektöründe FAVÖK çoğunlukla olmadığı için değerleme PD/DD ile
-yapılır. En az 4 geçerli kriteri olmayan şirkete
+Bankaların çoğunda FAVÖK olmadığı için değerleme PD/DD ile yapılır.
+Borç/Özkaynak'ta mevduat borca dahil değildir; oran bankalar için de
+anlamlıdır. En az 4 geçerli kriteri olmayan şirkete
 yıldız verilmez ("—"). Sol paneldeki **⭐ Yıldız Analizi** her hissenin
 kriter dökümünü ve kaybedilen yıldızlar için gereken değişimi gösterir.
 ⭐⭐⭐⭐⭐⭐⭐ "al" demek değildir; kalite + nakit +
