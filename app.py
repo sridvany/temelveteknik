@@ -16,6 +16,20 @@ st.markdown("""
 .stTabs button[data-baseweb="tab"] p {
     font-weight: 700 !important;
 }
+/* YZ Listesi Oluştur butonu yeşil (key="yz_buton") */
+.st-key-yz_buton button {
+    background-color: #2e7d32 !important;
+    border-color: #2e7d32 !important;
+    color: #ffffff !important;
+}
+.st-key-yz_buton button:hover {
+    background-color: #388e3c !important;
+    border-color: #388e3c !important;
+}
+.st-key-yz_buton button:disabled {
+    background-color: #2e7d32 !important;
+    opacity: 0.45;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -413,6 +427,7 @@ if market == "america":
     with yz_kolon:
         yz_tara = st.button(
             "🤖 YZ Listesi Oluştur",
+            key="yz_buton",
             disabled=pd_aralik_hatali or yz_listesi is None,
             help="yz_listesi.csv'deki şirketleri değerlendirir. Sektör "
                  "medyanları yukarıdaki filtrelerle taranan tüm piyasadan "
