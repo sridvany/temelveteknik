@@ -400,6 +400,65 @@ if pd_aralik_hatali:
 YZ_LISTESI_YOLU = Path(__file__).with_name("yz_listesi.csv")
 YZ_KOLONLARI = ["Hisse", "Tema", "Kademe", "YZ Bağlantısı"]
 
+# Tema Özeti okuma notu: uygulamada tablonun altında, Excel'de Tema Özeti
+# sayfasında tablonun altında gösterilir. Metin tek yerden düzenlenir.
+TEMA_OKUMA_NOTU = [
+    ("Nasıl okunur?", [
+        ("Şirket", "Temadaki şirket sayısı. ⚠️ 3'ten az şirketli temalarda "
+                   "medyan sütunları temayı temsil etmez (2 şirkette medyan = "
+                   "ikisinin ortalaması); bu temaları tek tek şirketlere "
+                   "bakarak değerlendirin."),
+        ("Ort. Yıldız (0–7)", "Temanın mutlak kalitesi. Verisi olmayan (⚪) "
+                              "kriterler sayılmaz."),
+        ("Medyan Sektör Skoru (0–100)", "Temadaki şirketlerin kendi "
+                                        "sektörlerine göre konumu. 50 üstü: "
+                                        "oranların çoğunda sektör medyanının "
+                                        "önünde. Sektör medyanları YZ "
+                                        "listesinden değil, tüm piyasadan "
+                                        "hesaplanır."),
+        ("Medyan F/K ve FD/FAVÖK", "Temanın ne kadar pahalı fiyatlandığı. "
+                                   "Negatif ve aykırı değerler katılmaz; boşsa "
+                                   "temadaki şirketlerin çoğu zararda demektir."),
+    ]),
+    ("Birlikte okuma", [
+        ("", "Yüksek yıldız + düşük F/K → kaliteli ve görece ucuz tema."),
+        ("", "Yüksek yıldız + yüksek F/K → kaliteli ama piyasa büyümeyi "
+             "fiyatlamış."),
+        ("", "Düşük yıldız + boş F/K → zararda, yatırım fazındaki tema "
+             "(ör. neocloud); değeri kâra değil büyüme beklentisine dayanır."),
+    ]),
+    ("Çekince", [
+        ("", "Tema ataması bir yargıdır ve şirketlerin YZ'den elde ettiği gelir "
+             "payı veride yok. Bir şirketin tüm finansalları temasına yansır "
+             "(ör. CSCO'nun YZ dışı gelirleri de Ağ/optik temasında sayılır)."),
+    ]),
+]
+
+
+def tema_notu_markdown() -> str:
+    parcalar = []
+    for baslik, satirlar in TEMA_OKUMA_NOTU:
+        parcalar.append(f"**{baslik}**")
+        parcalar += [
+            f"- **{k}:** {v}" if k else f"- {v}" for k, v in satirlar
+        ]
+        parcalar.append("")
+    return "\n".join(parcalar)
+
+
+def tema_notu_excele_yaz(sayfa, kitap, ilk_satir: int):
+    kalin = kitap.add_format({"bold": True})
+    satir = ilk_satir
+    sayfa.write(satir, 0, "📘 Tema Özeti nasıl okunur?", kalin)
+    satir += 2
+    for baslik, satirlar in TEMA_OKUMA_NOTU:
+        sayfa.write(satir, 0, baslik, kalin)
+        satir += 1
+        for k, v in satirlar:
+            sayfa.write(satir, 0, f"• {k}: {v}" if k else f"• {v}")
+            satir += 1
+        satir += 1
+
 
 def yz_listesi_oku():
     """(liste, hata) döndürür; dosya yok ya da bozuksa liste None olur."""
@@ -963,6 +1022,8 @@ if "tarama" in st.session_state:
                 "F/K ve FD/FAVÖK medyanlarına aykırı ve negatif değerler katılmaz."
             )
             st.dataframe(tema_ozet, use_container_width=True, hide_index=True)
+            with st.expander("📘 Tema Özeti nasıl okunur?"):
+                st.markdown(tema_notu_markdown())
 
         # Yıldız kolonu Özet dışındaki sekmelerde de görünsün (Şirket'ten sonra)
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
@@ -992,6 +1053,9 @@ if "tarama" in st.session_state:
             df_nakit.to_excel(writer, index=False, sheet_name="Nakit Akışı")
             if tema_ozet is not None:
                 tema_ozet.to_excel(writer, index=False, sheet_name="Tema Özeti")
+                tema_notu_excele_yaz(
+                    writer.sheets["Tema Özeti"], writer.book, len(tema_ozet) + 2
+                )
         dosya_on_ek = f"{market}_YZ" if yz_listesi_aktif is not None else market
         st.download_button(
             label="📥 Excel Dosyasını İndir",
