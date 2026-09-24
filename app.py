@@ -377,6 +377,18 @@ if st.button("Piyasayı Tara ve Verileri Getir", disabled=pd_aralik_hatali):
         tuple(TUM_KOLONLAR)
     )
 
+# Sol panel: yazılan hissenin yıldız ve Sektör Skoru dökümü. Kutu burada
+# oluşturulur, içerik tarama hesapları bittikten sonra aşağıda doldurulur.
+yildiz_panel = st.sidebar.container()
+st.sidebar.divider()
+with yildiz_panel:
+    st.header("⭐ Yıldız Analizi")
+    yildiz_hisse = st.text_input(
+        "Hisse (taramadaki ticker, ör. NVDA)", key="yildiz_hisse"
+    ).strip().upper()
+    if "tarama" not in st.session_state:
+        st.caption("Önce piyasayı tarayın.")
+
 if "tarama" in st.session_state:
     df, hata = st.session_state["tarama"]
     if df.empty:
@@ -552,6 +564,123 @@ if "tarama" in st.session_state:
         )
         df["_yildiz_sayi"] = yildiz_sayi
         df["_bayrakli"] = bayrak_df.any(axis=1)
+
+        # --- Sol panel: seçilen hissenin dökümü ---
+        if yildiz_hisse:
+            with yildiz_panel:
+                eslesen = df.index[
+                    df["Hisse"].astype(str).str.upper() == yildiz_hisse
+                ]
+                if len(eslesen) == 0:
+                    st.warning(
+                        f"{yildiz_hisse} bu taramada yok (filtrelerle "
+                        f"elenmiş veya ticker farklı olabilir)."
+                    )
+                else:
+                    i = eslesen[0]
+                    r = df.loc[i]
+
+                    def _f(v, ondalik=2):
+                        return "—" if pd.isna(v) else f"{v:,.{ondalik}f}"
+
+                    skor = r["Sektör Skoru"]
+                    st.markdown(
+                        f"**{r['Hisse']}** — {r['Şirket']}  \n"
+                        f"{r['Yıldız']} · Sektör Skoru: "
+                        f"{'—' if pd.isna(skor) else skor}  \n"
+                        f"Sektör: {r['Sektör']}"
+                    )
+
+                    # Değerleme kriterinin iki ayağını ayrı işaretle
+                    def _ayak(etiket, ham, temiz, m):
+                        if pd.isna(temiz) or pd.isna(m):
+                            return f"{etiket} {_f(ham, 1)} ⚪"
+                        if temiz <= m:
+                            return f"{etiket} {_f(ham, 1)} ≤ sektör {_f(m, 1)} ✓"
+                        return f"{etiket} {_f(ham, 1)} > sektör {_f(m, 1)} ✗"
+
+                    deger_aciklama = (
+                        _ayak("F/K", r["F/K (FKO)"], fk_poz[i], r["F/K (Sekt.)"])
+                        + " ve "
+                        + _ayak("FD/FAVÖK", r["FD/FAVÖK"], fd_poz[i],
+                                r["FD/FAVÖK (Sekt.)"])
+                    )
+                    kriter_satirlari = [
+                        ("roe", "Kârlılık",
+                         f"ROE %{_f(r['ROE %'], 1)} (eşik ≥ 15)"),
+                        ("roic", "Sermaye verimi",
+                         f"ROIC %{_f(r['ROIC %'], 1)} (eşik ≥ 10)"),
+                        ("nakit", "Nakit dönüşümü",
+                         f"CFO/Net Kâr {_f(r['CFO/Net Kâr'])} (eşik ≥ 1)"),
+                        ("fcf", "Serbest nakit",
+                         f"FCF verimi %{_f(r['FCF Verimi %'])} (eşik > 0)"),
+                        ("borc", "Borç",
+                         f"Borç/Özkaynak {_f(r['Borç / Özkaynak'])} (eşik ≤ 1)"),
+                        ("buyume", "Büyüme",
+                         f"EPS büyümesi %{_f(r['EPS Büyüme YY % (TTM)'], 1)} "
+                         f"(eşik > 0)"),
+                        ("deger", "Değerleme", deger_aciklama),
+                    ]
+                    satirlar = []
+                    for anahtar, baslik, aciklama in kriter_satirlari:
+                        if not gecerli.loc[i, anahtar]:
+                            isaret, ek = "⚪", " — veri yok / hesap dışı"
+                        elif kriter.loc[i, anahtar]:
+                            isaret, ek = "✅", ""
+                        else:
+                            isaret, ek = "❌", ""
+                        satirlar.append(
+                            f"{isaret} **{baslik}:** {aciklama}{ek}"
+                        )
+                    st.markdown("  \n".join(satirlar))
+                    if gecerli_sayisi[i] < 4:
+                        st.caption(
+                            "Geçerli kriter sayısı 4'ten az olduğu için "
+                            "yıldız verilmedi."
+                        )
+
+                    BAYRAK_ACIKLAMA = {
+                        "⚠kâr": "Net kâr faaliyet gelirini aşıyor; kâr esas "
+                                "işten gelmiyor olabilir.",
+                        "⚠fcf": "Bildirilen FCF, CFO − CapEx ile %10'dan "
+                                "fazla uyuşmuyor.",
+                        "⚠eps": "EPS büyümesi |%300|'ü aşıyor; baz etkisi, "
+                                "büyüme kriteri gürültülü.",
+                        "⚠oran": "Brüt kâr yok/negatif veya finans sektörü; "
+                                 "marj ve FAVÖK bazlı oranlar yapısal olarak "
+                                 "geçersiz.",
+                    }
+                    aktif_bayrak = [b for b in BAYRAK_ACIKLAMA if bayrak_df.loc[i, b]]
+                    if aktif_bayrak:
+                        st.markdown(
+                            "**Bayraklar:**  \n" + "  \n".join(
+                                f"{b}: {BAYRAK_ACIKLAMA[b]}" for b in aktif_bayrak
+                            )
+                        )
+                    else:
+                        st.caption("Bayrak yok ✓")
+
+                    with st.expander("Sektör Skoru dökümü"):
+                        skor_satir = []
+                        for oran, sekt_ad, sadece_poz, yon in OZET_ORANLAR:
+                            v = oran_temiz(oran, sadece_poz)[i]
+                            m = r[sekt_ad]
+                            yon_yazi = "düşük iyi" if yon == "dusuk" else "yüksek iyi"
+                            if pd.isna(v) or pd.isna(m):
+                                isaret = "⚪"
+                            elif (v <= m) if yon == "dusuk" else (v >= m):
+                                isaret = "✅"
+                            else:
+                                isaret = "❌"
+                            skor_satir.append(
+                                f"{isaret} {oran}: {_f(r[oran])} · sektör "
+                                f"{_f(m)} ({yon_yazi})"
+                            )
+                        st.markdown("  \n".join(skor_satir))
+                        st.caption(
+                            "⚪ = veri yok, aykırı ya da sektör medyanı yok; "
+                            "skora katılmaz."
+                        )
 
         # Yıldız kolonu Özet dışındaki sekmelerde de görünsün (Şirket'ten sonra)
         ortak_adlar = [k[1] for k in ORTAK_KOLONLAR]
